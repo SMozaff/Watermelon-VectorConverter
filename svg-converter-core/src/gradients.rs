@@ -10,13 +10,14 @@ use crate::models::{Gradient, GradientStop};
 use crate::utils::{parse_rgb, to_aarrggbb};
 use std::collections::BTreeMap;
 
+#[inline]
 fn attr_f32(el: &roxmltree::Node, name: &str, default: f32) -> f32 {
     el.attribute(name)
         .and_then(|s| {
             let s = s.trim();
-            // support "50%" -> 0.5 for objectBoundingBox-style coords
-            if let Some(p) = s.strip_suffix('%') {
-                p.trim().parse::<f32>().ok().map(|v| v / 100.0)
+            // Fast path: common case is plain float without percent
+            if s.as_bytes().last() == Some(&b'%') {
+                s[..s.len()-1].trim().parse::<f32>().ok().map(|v| v / 100.0)
             } else {
                 s.parse().ok()
             }
