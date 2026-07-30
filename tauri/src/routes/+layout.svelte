@@ -12,7 +12,7 @@
   <div class="main-wrap">
     <!-- Top banner: replace src with your PNG asset path -->
     <div class="top-banner">
-      <img src="/banner.png" alt="" class="banner-img" onerror="this.style.display='none'" />
+      <img src="/banner.png" alt="" class="banner-img" onerror={(e) => (e.currentTarget.style.display = 'none')} />
       <span class="banner-title">Watermelon Vector Converter</span>
     </div>
     <main class="content">
