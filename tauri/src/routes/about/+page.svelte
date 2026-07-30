@@ -18,10 +18,10 @@
   <div class="logo-strip">
     <!-- Watermelon logo: place watermelon_gen.png in tauri/public/ -->
     <img src="/watermelon_gen.png" alt="Watermelon" class="logo-wm"
-         onerror="this.style.display='none'" />
+         onerror={(e) => (e.currentTarget.style.display = 'none')} />
     <!-- Raven logo: place digital_raven_hq.png in tauri/public/ -->
     <img src="/digital_raven_hq.png" alt="Digital Raven" class="logo-raven"
-         onerror="this.style.display='none'" />
+         onerror={(e) => (e.currentTarget.style.display = 'none')} />
   </div>
 
   <h1 class="app-name">Watermelon Vector Converter</h1>
