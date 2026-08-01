@@ -17,16 +17,6 @@ license = "LicenseRef-Proprietary"
 # Profiles belong at workspace root only
 [profile.release]
 opt-level = 3
-lto = "fat"
+lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
-
-[profile.release-with-debug]
-inherits = "release"
-debug = true
-strip = false
-
-[profile.bench]
-inherits = "release"
-debug = true

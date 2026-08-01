@@ -248,3 +248,28 @@ fn no_animators_still_renders_single_static_frame() {
     let result = render_avd_frames(avd, 30, 90, 64).expect("should render");
     assert!(!result.frames.is_empty());
 }
+
+#[test]
+fn non_square_viewport_renders_without_error() {
+    // Regression guard: the base vector's actual viewportWidth/Height must
+    // be read and used, not a hardcoded 24x24 — every other fixture in
+    // this file happens to use 24x24, which would silently hide this bug.
+    let avd = br##"<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:aapt="http://schemas.android.com/aapt">
+        <vector android:width="48dp" android:height="96dp"
+                android:viewportWidth="48" android:viewportHeight="96">
+            <path android:name="tall_path" android:pathData="M0,0 L48,0 L48,96 L0,96 Z" android:fillColor="#FF0000FF"/>
+        </vector>
+        <target android:name="tall_path">
+            <aapt:attr name="android:animation">
+                <objectAnimator android:propertyName="alpha" android:valueFrom="1.0" android:valueTo="0.2"
+                    android:duration="500" android:interpolator="@android:interpolator/linear"/>
+            </aapt:attr>
+        </target>
+    </animated-vector>"##;
+    let result = render_avd_frames(avd, 10, 90, 64).expect("should render a non-square viewport");
+    assert!(!result.frames.is_empty());
+    for png in &result.frames {
+        assert_eq!(&png[0..4], &[0x89, 0x50, 0x4E, 0x47]);
+    }
+}

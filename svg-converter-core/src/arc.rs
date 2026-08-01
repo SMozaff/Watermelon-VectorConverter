@@ -11,7 +11,6 @@ use std::f64::consts::PI;
 /// Returns a sequence of cubic control points (x1,y1,x2,y2,x,y) approximating
 /// the arc from (x0,y0) to (x,y) with the given rx,ry,x_axis_rotation(deg),
 /// large_arc flag and sweep flag.
-#[inline]
 pub fn arc_to_cubics(
     x0: f64, y0: f64,
     mut rx: f64, mut ry: f64, x_axis_rot_deg: f64,
@@ -73,48 +72,33 @@ pub fn arc_to_cubics(
 
     let mut out = Vec::with_capacity(segs);
     let mut th = theta1;
-    
-    // Precompute sine/cosine of rotation for efficiency
-    let cos_th = th.cos();
-    let sin_th = th.sin();
-    let cos_delta = delta.cos();
-    let sin_delta = delta.sin();
-    
-    for i in 0..segs {
+    let pt = |ang: f64| -> (f64, f64) {
+        let (ca, sa) = (ang.cos(), ang.sin());
+        (
+            cx + rx * ca * cos_phi - ry * sa * sin_phi,
+            cy + rx * ca * sin_phi + ry * sa * cos_phi,
+        )
+    };
+    for _ in 0..segs {
         let th2 = th + delta;
-        
-        // Compute start and end points of segment
-        let (x1, y1) = (
-            cx + rx * cos_th * cos_phi - ry * sin_th * sin_phi,
-            cy + rx * cos_th * sin_phi + ry * sin_th * cos_phi,
-        );
-        let (x2, y2) = (
-            cx + rx * (cos_th * cos_delta - sin_th * sin_delta) * cos_phi 
-                - ry * (cos_th * sin_delta + sin_th * cos_delta) * sin_phi,
-            cy + rx * (cos_th * cos_delta - sin_th * sin_delta) * sin_phi 
-                + ry * (cos_th * sin_delta + sin_th * cos_delta) * cos_phi,
-        );
-        
-        // Tangent-based control points using precomputed derivatives
-        let d1x = -rx * sin_th * cos_phi - ry * cos_th * sin_phi;
-        let d1y = -rx * sin_th * sin_phi + ry * cos_th * cos_phi;
-        
-        let sin_th2 = th2.sin();
-        let cos_th2 = th2.cos();
-        let d2x = -rx * sin_th2 * cos_phi - ry * cos_th2 * sin_phi;
-        let d2y = -rx * sin_th2 * sin_phi + ry * cos_th2 * cos_phi;
-        
+        let (x1, y1) = pt(th);
+        let (x2, y2) = pt(th2);
+        // tangent-based control points
+        let (sa1, ca1) = (th.sin(), th.cos());
+        let (sa2, ca2) = (th2.sin(), th2.cos());
+        let c1x = x1 + t * (-rx * ca1 * 0.0 - rx * sa1 * cos_phi - ry * ca1 * sin_phi);
+        // The clean formulation:
+        let d1x = -rx * sa1 * cos_phi - ry * ca1 * sin_phi;
+        let d1y = -rx * sa1 * sin_phi + ry * ca1 * cos_phi;
+        let d2x = -rx * sa2 * cos_phi - ry * ca2 * sin_phi;
+        let d2y = -rx * sa2 * sin_phi + ry * ca2 * cos_phi;
+        let _ = c1x;
         out.push([
             x1 + t * d1x, y1 + t * d1y,
             x2 - t * d2x, y2 - t * d2y,
             x2, y2,
         ]);
-        
         th = th2;
-        // Update trig values incrementally for next iteration
-        let new_cos = (th + delta).cos();
-        let new_sin = (th + delta).sin();
-        let _ = (new_cos, new_sin); // Reserved for future incremental update
     }
     out
 }

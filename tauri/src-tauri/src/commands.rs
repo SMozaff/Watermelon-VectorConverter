@@ -125,12 +125,10 @@ pub fn do_detect_animation(file_bytes: Vec<u8>, is_avd: bool) -> String {
     .to_string()
 }
 
-/// Render an AVD's animation frames (Contract C-5.2). Fully implemented
-/// natively, but not yet wired into the frontend — the Animation Preview
-/// Engine (Contract C-5) is deferred as a premium, post-MVP feature.
-/// Surfaces `UnsupportedFeature` (and any other `ConversionError`) as a
-/// normal `Err(ConversionErrorDto)` — e.g. for an externally-referenced
-/// base vector — a catchable result, not a bug in this bridge.
+/// Render an AVD's animation frames (Contract C-5.2). Surfaces
+/// `UnsupportedFeature` (and any other `ConversionError`) as a normal
+/// `Err(ConversionErrorDto)` — this is the expected, catchable result while
+/// the underlying C-5.2 engine is still landing, not a bug in this bridge.
 pub fn do_render_avd_frames(
     avd_bytes: Vec<u8>,
     fps: u32,
@@ -293,7 +291,8 @@ pub fn open_url(url: String) -> Result<(), ConversionErrorDto> {
 }
 
 /// Register or unregister the bundled viewer as the HKCU handler for a
-/// given extension ("svg" or "xml"). No-op returning an error on non-Windows.
+/// given extension ("svg" or "xml") on Windows, or as the default MIME
+/// handler via xdg-mime + a self-authored .desktop file on Linux.
 #[tauri::command]
 pub fn set_file_association(ext: String, enabled: bool) -> Result<(), ConversionErrorDto> {
     #[cfg(windows)]
@@ -301,25 +300,43 @@ pub fn set_file_association(ext: String, enabled: bool) -> Result<(), Conversion
         windows_assoc::set_association(&ext, enabled)
             .map_err(|e| ConversionErrorDto { code: 1098, message: e.to_string() })
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_assoc::set_association(&ext, enabled)
+            .map_err(|message| ConversionErrorDto { code: 1098, message })
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux_assoc::set_association(&ext, enabled)
+            .map_err(|e| ConversionErrorDto { code: 1098, message: e.to_string() })
+    }
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         let _ = (ext, enabled);
         Err(ConversionErrorDto {
             code: 1098,
-            message: "File association toggling is only supported on Windows.".into(),
+            message: "File association toggling is only supported on Windows, macOS, and Linux.".into(),
         })
     }
 }
 
-/// Query whether the viewer is currently the HKCU handler for a given
-/// extension. Always false on non-Windows.
+/// Query whether the viewer is currently the default handler for a given
+/// extension. Always false on unsupported platforms.
 #[tauri::command]
 pub fn get_file_association(ext: String) -> bool {
     #[cfg(windows)]
     {
         windows_assoc::is_associated(&ext)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos_assoc::is_associated(&ext)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux_assoc::is_associated(&ext)
+    }
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         let _ = ext;
         false
@@ -392,5 +409,293 @@ mod windows_assoc {
         hkcu.open_subkey(&ext_path)
             .and_then(|k| k.get_raw_value(PROG_ID))
             .is_ok()
+    }
+}
+
+/// macOS association, via direct FFI to LaunchServices — NOT tested on a
+/// real Mac yet (no Mac access at time of writing). Written carefully
+/// against Apple's documented C signatures rather than a third-party
+/// binding crate (core-services documents itself as "woefully
+/// incomplete"), but this module needs real-machine verification before
+/// being trusted the way the Windows/Linux equivalents already are.
+///
+/// Uses the deprecated-but-still-functional LSSetDefaultRoleHandlerForContentType
+/// (available since macOS 10.4) rather than the newer NSWorkspace method
+/// (macOS 12+ only), since this project's default minimum system version
+/// is 10.13 — the newer API would silently be unavailable on 10.13–11.x.
+#[cfg(target_os = "macos")]
+mod macos_assoc {
+    use core_foundation::base::TCFType;
+    use core_foundation::string::CFString;
+    use std::os::raw::c_void;
+
+    // Bundle identifier of the sidecar viewer, as declared in
+    // viewer/src-tauri/tauri.conf.json's "identifier" field. Must match
+    // exactly, or LaunchServices will report success while silently
+    // pointing at nothing (this is the single most likely thing to verify
+    // /fix on first real-Mac test if association doesn't take effect).
+    const VIEWER_BUNDLE_ID: &str = "com.watermelon.viewer";
+
+    type OSStatus = i32;
+    type LSRolesMask = u32;
+    const KLS_ROLES_ALL: LSRolesMask = 0xFFFF_FFFF;
+
+    #[allow(non_snake_case)]
+    #[link(name = "CoreServices", kind = "framework")]
+    extern "C" {
+        fn LSSetDefaultRoleHandlerForContentType(
+            inContentType: *const c_void,
+            inRole: LSRolesMask,
+            inHandlerBundleID: *const c_void,
+        ) -> OSStatus;
+
+        fn LSCopyDefaultRoleHandlerForContentType(
+            inContentType: *const c_void,
+            inRole: LSRolesMask,
+        ) -> *const c_void; // owned CFStringRef, or NULL
+
+        fn UTTypeCreatePreferredIdentifierForTag(
+            inTagClass: *const c_void,
+            inTag: *const c_void,
+            inConformingToUTI: *const c_void,
+        ) -> *const c_void; // owned CFStringRef, or NULL
+    }
+
+    /// "public.filename-extension" is the documented literal string value
+    /// of the kUTTagClassFilenameExtension constant — declared as a plain
+    /// string here rather than an extern static, since CF constant symbols
+    /// are trickier to bind correctly than functions and the literal value
+    /// is stable/documented by Apple.
+    fn filename_extension_uti(ext: &str) -> Option<CFString> {
+        let tag_class = CFString::new("public.filename-extension");
+        let tag = CFString::new(ext);
+        unsafe {
+            let uti_ref = UTTypeCreatePreferredIdentifierForTag(
+                tag_class.as_concrete_TypeRef() as *const c_void,
+                tag.as_concrete_TypeRef() as *const c_void,
+                std::ptr::null(),
+            );
+            if uti_ref.is_null() {
+                return None;
+            }
+            // wrap_under_create_rule takes ownership of the +1 reference
+            // UTTypeCreatePreferredIdentifierForTag returns, so CFRelease
+            // is handled by CFString's own Drop — do not release it again.
+            Some(CFString::wrap_under_create_rule(uti_ref as core_foundation::string::CFStringRef))
+        }
+    }
+
+    pub fn set_association(ext: &str, enabled: bool) -> Result<(), String> {
+        let uti = filename_extension_uti(ext)
+            .ok_or_else(|| format!("could not resolve a UTI for extension '{ext}'"))?;
+
+        // There's no documented "unset" — disabling means pointing the
+        // role handler back at Finder's own default view of things. In
+        // practice, re-running LSSetDefaultRoleHandlerForContentType with
+        // Finder's bundle ID is the standard approach other tools use;
+        // since Finder is always present, this is a safe, universal
+        // fallback rather than leaving the extension in an undefined state.
+        let target_bundle_id = if enabled { VIEWER_BUNDLE_ID } else { "com.apple.finder" };
+        let bundle_id_cf = CFString::new(target_bundle_id);
+
+        let status = unsafe {
+            LSSetDefaultRoleHandlerForContentType(
+                uti.as_concrete_TypeRef() as *const c_void,
+                KLS_ROLES_ALL,
+                bundle_id_cf.as_concrete_TypeRef() as *const c_void,
+            )
+        };
+
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(format!("LSSetDefaultRoleHandlerForContentType failed with OSStatus {status}"))
+        }
+    }
+
+    pub fn is_associated(ext: &str) -> bool {
+        let uti = match filename_extension_uti(ext) {
+            Some(u) => u,
+            None => return false,
+        };
+        unsafe {
+            let handler_ref = LSCopyDefaultRoleHandlerForContentType(
+                uti.as_concrete_TypeRef() as *const c_void,
+                KLS_ROLES_ALL,
+            );
+            if handler_ref.is_null() {
+                return false;
+            }
+            let handler = CFString::wrap_under_create_rule(handler_ref as core_foundation::string::CFStringRef);
+            handler.to_string() == VIEWER_BUNDLE_ID
+        }
+    }
+}
+/// meant to auto-generate a .desktop file + MIME registration at .deb
+/// install time, but this is a known-unreliable path upstream (tauri-apps/
+/// tauri#9803: "file association... doesn't work at all [on Linux]").
+/// Rather than depend on that, this registers a REAL, self-authored
+/// .desktop file via the standard freedesktop.org mechanism (xdg-mime +
+/// update-desktop-database), the same way any other Linux app would,
+/// independent of whether Tauri's own bundler-level generation worked.
+#[cfg(target_os = "linux")]
+mod linux_assoc {
+    use std::fs;
+    use std::io::{self, Write};
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    const DESKTOP_FILE_NAME: &str = "watermelon-vector-viewer.desktop";
+    const APP_ID: &str = "watermelon-vector-viewer";
+
+    fn mime_type_for(ext: &str) -> &'static str {
+        match ext {
+            "svg" => "image/svg+xml",
+            // VectorDrawable XML has no registered public MIME type of its
+            // own; text/xml is the correct generic fallback and is what
+            // Tauri's own extension-inference would also produce.
+            _ => "text/xml",
+        }
+    }
+
+    fn applications_dir() -> io::Result<PathBuf> {
+        let home = std::env::var("HOME")
+            .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "HOME not set"))?;
+        let dir = PathBuf::from(home).join(".local/share/applications");
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    fn desktop_file_path() -> io::Result<PathBuf> {
+        Ok(applications_dir()?.join(DESKTOP_FILE_NAME))
+    }
+
+    /// Path to the sidecar viewer binary, staged alongside the main
+    /// converter executable by Tauri's externalBin bundling (no extension
+    /// on Linux, unlike the Windows .exe suffix).
+    fn viewer_exe_path() -> io::Result<PathBuf> {
+        let current = std::env::current_exe()?;
+        let dir = current.parent().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "could not resolve executable directory")
+        })?;
+        Ok(dir.join("wvgc-viewer"))
+    }
+
+    /// Write (or ensure) the .desktop file exists, declaring every
+    /// supported MIME type up front — regardless of which single extension
+    /// is being toggled — since a .desktop file's MimeType list is global
+    /// to the file, not per-extension. Individual extensions are then
+    /// associated/disassociated purely via `xdg-mime default`/`query`,
+    /// which is the real source of truth for "is this the current
+    /// default," matching how Linux desktop environments actually decide.
+    fn ensure_desktop_file() -> io::Result<()> {
+        let exe = viewer_exe_path()?;
+        let exe_str = exe.to_string_lossy();
+        let contents = format!(
+            "[Desktop Entry]\n\
+             Type=Application\n\
+             Name=Watermelon Vector Viewer\n\
+             Comment=Preview SVG and Android VectorDrawable files\n\
+             Exec=\"{exe}\" %f\n\
+             Terminal=false\n\
+             NoDisplay=true\n\
+             MimeType=image/svg+xml;text/xml;application/xml;\n\
+             Categories=Graphics;Viewer;\n",
+            exe = exe_str,
+        );
+        let path = desktop_file_path()?;
+        let mut file = fs::File::create(&path)?;
+        file.write_all(contents.as_bytes())?;
+        Ok(())
+    }
+
+    /// Refresh the desktop database so file managers pick up the new/
+    /// changed .desktop file without requiring a logout or reboot. Best
+    /// effort: some minimal distros lack this tool, so a missing binary is
+    /// not treated as a hard failure — the .desktop file and xdg-mime
+    /// state are still correct even if the cache refresh is skipped.
+    fn refresh_desktop_database() {
+        if let Ok(dir) = applications_dir() {
+            let _ = Command::new("update-desktop-database").arg(&dir).status();
+        }
+    }
+
+    pub fn set_association(ext: &str, enabled: bool) -> io::Result<()> {
+        ensure_desktop_file()?;
+        refresh_desktop_database();
+
+        let mime = mime_type_for(ext);
+        if enabled {
+            let status = Command::new("xdg-mime")
+                .args(["default", DESKTOP_FILE_NAME, mime])
+                .status()?;
+            if !status.success() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("xdg-mime default failed for {mime} (exit {status})"),
+                ));
+            }
+        } else {
+            // xdg-mime has no direct "unset default" — the standard
+            // approach is to remove our entry from the user's
+            // mimeapps.list, which is what xdg-mime's "default" command
+            // itself writes to. We edit that file directly rather than
+            // shelling out further, since there is no single-purpose CLI
+            // command for removal.
+            remove_default_from_mimeapps(mime)?;
+        }
+        Ok(())
+    }
+
+    /// Returns every mimeapps.list path xdg-mime is known to write to,
+    /// depending on distro/xdg-utils version — some write to
+    /// ~/.local/share/applications/mimeapps.list, others to
+    /// ~/.config/mimeapps.list. Checking only one has been observed to
+    /// silently miss the actual entry on some systems, so both are
+    /// checked/edited for the removal path.
+    fn mimeapps_list_paths() -> io::Result<Vec<PathBuf>> {
+        let home = std::env::var("HOME")
+            .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "HOME not set"))?;
+        let home = PathBuf::from(home);
+        Ok(vec![
+            home.join(".local/share/applications/mimeapps.list"),
+            home.join(".config/mimeapps.list"),
+        ])
+    }
+
+    fn remove_default_from_mimeapps(mime: &str) -> io::Result<()> {
+        for path in mimeapps_list_paths()? {
+            if !path.exists() {
+                continue;
+            }
+            let content = fs::read_to_string(&path)?;
+            let filtered: String = content
+                .lines()
+                .filter(|line| {
+                    let trimmed = line.trim();
+                    !(trimmed.starts_with(&format!("{mime}=")) && trimmed.contains(DESKTOP_FILE_NAME))
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            fs::write(&path, filtered)?;
+        }
+        Ok(())
+    }
+
+    /// Reads the user's actual current default handler via `xdg-mime
+    /// query default`, rather than just checking whether our .desktop file
+    /// exists — the existence of the file doesn't mean it's the ACTIVE
+    /// default, matching the semantic of the Windows is_associated check.
+    pub fn is_associated(ext: &str) -> bool {
+        let mime = mime_type_for(ext);
+        let output = Command::new("xdg-mime")
+            .args(["query", "default", mime])
+            .output();
+        match output {
+            Ok(o) if o.status.success() => {
+                String::from_utf8_lossy(&o.stdout).trim() == DESKTOP_FILE_NAME
+            }
+            _ => false,
+        }
     }
 }

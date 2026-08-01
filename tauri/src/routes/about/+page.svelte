@@ -18,10 +18,10 @@
   <div class="logo-strip">
     <!-- Watermelon logo: place watermelon_gen.png in tauri/public/ -->
     <img src="/watermelon_gen.png" alt="Watermelon" class="logo-wm"
-         onerror={(e) => (e.currentTarget.style.display = 'none')} />
+         onerror="this.style.display='none'" />
     <!-- Raven logo: place digital_raven_hq.png in tauri/public/ -->
     <img src="/digital_raven_hq.png" alt="Digital Raven" class="logo-raven"
-         onerror={(e) => (e.currentTarget.style.display = 'none')} />
+         onerror="this.style.display='none'" />
   </div>
 
   <h1 class="app-name">Watermelon Vector Converter</h1>
@@ -35,7 +35,7 @@
   <div class="divider"></div>
 
   <div class="links">
-    <button class="link-row" onclick={() => openUrl("https://github.com/muzaff-beep/Watermelon-VectorConverter")}>
+    <button class="link-row" on:click={() => openUrl("https://github.com/muzaff-beep/Watermelon-VectorConverter")}>
       <span class="link-icon">⭐</span>
       <div class="link-text">
         <span class="link-label">GitHub Repository</span>
@@ -43,7 +43,7 @@
       </div>
     </button>
 
-    <button class="link-row" onclick={() => openUrl("mailto:so.muzaff@gmail.com")}>
+    <button class="link-row" on:click={() => openUrl("mailto:so.muzaff@gmail.com")}>
       <span class="link-icon">✉️</span>
       <div class="link-text">
         <span class="link-label">Contact</span>

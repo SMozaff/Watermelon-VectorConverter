@@ -30,11 +30,9 @@ interface SvgConverter {
     fun detectAnimation(fileBytes: ByteArray, isAvd: Boolean): AnimationKind
 
     /**
-     * Render an AVD's animation frames (Contract C-5.2). Fully implemented
-     * natively; not yet wired into any screen, as the Animation Preview
-     * Engine (Contract C-5) is deferred as a premium, post-MVP feature.
-     * Throws [ConversionException] on failure (e.g. UnsupportedFeature for
-     * an externally-referenced base vector).
+     * Render an AVD's animation frames (Contract C-5.2). Throws
+     * [ConversionException] on failure, including UnsupportedFeature while
+     * the underlying engine is still landing.
      */
     fun renderAvdFrames(avdBytes: ByteArray, fps: Int, maxFrames: Int, px: Int): AvdFramesResult
 }

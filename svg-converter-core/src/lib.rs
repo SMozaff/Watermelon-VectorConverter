@@ -7,12 +7,10 @@
 //!   P — Preview & Batch    : IMPLEMENTED + tested (C-2)
 //!   B — FFI Bridge         : IMPLEMENTED (jni.rs write+typecheck-only; Tauri tested; parity verified)
 //!   M — Android App        : IMPLEMENTED full app (write+typecheck-only; builds via android.yml CI)
-//!   C-5 — Animation Preview Engine : DEFERRED as a shipped/exposed feature
-//!   (premium, post-MVP), but IMPLEMENTED and tested under the hood.
+//!   C-5 — Animation Preview Engine : DEFERRED, premium, post-MVP.
 //!     detect_animation (C-5.1) is real and complete — see animation.rs.
-//!     render_avd_frames (C-5.2) is also fully implemented and covered by
-//!     tests/avd_animation.rs — see animation_engine.rs. It is simply not
-//!     yet wired into any user-facing UI.
+//!     render_avd_frames (C-5.2) is scaffolding only, pending the Phase 0
+//!     test corpus — see animation_engine.rs.
 
 pub mod error;
 pub mod models;

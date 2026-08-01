@@ -1,22 +1,22 @@
 <script>
-  import { page } from "$app/state";
+  import { page } from "$app/stores";
 </script>
 
 <nav class="sidebar">
   <ul class="nav-links">
-    <li class:active={page.url.pathname === "/"}>
+    <li class:active={$page.url.pathname === "/"}>
       <a href="/">
         <span class="icon">⚡</span>
         <span>Convert</span>
       </a>
     </li>
-    <li class:active={page.url.pathname.startsWith("/settings")}>
+    <li class:active={$page.url.pathname.startsWith("/settings")}>
       <a href="/settings">
         <span class="icon">⚙️</span>
         <span>Settings</span>
       </a>
     </li>
-    <li class:active={page.url.pathname.startsWith("/about")}>
+    <li class:active={$page.url.pathname.startsWith("/about")}>
       <a href="/about">
         <span class="icon">ℹ️</span>
         <span>About</span>

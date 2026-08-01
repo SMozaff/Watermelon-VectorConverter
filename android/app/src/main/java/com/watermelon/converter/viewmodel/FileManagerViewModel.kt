@@ -262,56 +262,38 @@ class FileManagerViewModel(
         viewModelScope.launch {
             try {
                 val outFile = withContext(Dispatchers.IO) {
-                    if (files.size == 1) {
-                        // Single file: convert and save raw .xml directly — do not
-                        // round-trip through zip. Fixed 2026-07-22.
-                        val src = files[0]
-                        val svgBytes = src.readBytes()
-                        val xml = native.convertSvg(svgBytes)
-                        com.watermelon.converter.data.model.HistoryStore.add(src.name, xml, ok = true)
-                        val outName = xmlNameFor(src.name)
-                        val destUri = outputDestUri()
-                        com.watermelon.converter.util.OutputDestination.write(
-                            getApplication(), xml.toByteArray(), outName, destUri,
-                            mime = "application/xml",
-                        )
-                        val savedTo = com.watermelon.converter.util.OutputDestination
-                            .displayLabel(getApplication(), destUri) + "/" + outName
-                        ConvertMarkedResult(succeeded = 1, failed = 0, savedTo)
-                    } else {
-                        val zipBytes = zipFiles(files)
-                        val resultZip = native.convertZip(zipBytes, object : com.watermelon.converter.jni.ProgressCallback {
-                            override fun onProgress(done: Int, total: Int, currentName: String) {}
-                        })
-                        var succeeded = 0
-                        var failed = 0
-                        java.util.zip.ZipInputStream(resultZip.inputStream()).use { zis ->
-                            while (true) {
-                                val e = zis.nextEntry ?: break
-                                val content = zis.readBytes()
-                                if (e.name.endsWith(".error.txt")) {
-                                    failed++
-                                    val src = e.name.removeSuffix(".error.txt")
-                                    com.watermelon.converter.data.model.HistoryStore.add(
-                                        src, "", ok = false, error = String(content).trim()
-                                    )
-                                } else {
-                                    succeeded++
-                                    com.watermelon.converter.data.model.HistoryStore.add(
-                                        e.name, String(content), ok = true
-                                    )
-                                }
+                    val zipBytes = zipFiles(files)
+                    val resultZip = native.convertZip(zipBytes, object : com.watermelon.converter.jni.ProgressCallback {
+                        override fun onProgress(done: Int, total: Int, currentName: String) {}
+                    })
+                    var succeeded = 0
+                    var failed = 0
+                    java.util.zip.ZipInputStream(resultZip.inputStream()).use { zis ->
+                        while (true) {
+                            val e = zis.nextEntry ?: break
+                            val content = zis.readBytes()
+                            if (e.name.endsWith(".error.txt")) {
+                                failed++
+                                val src = e.name.removeSuffix(".error.txt")
+                                com.watermelon.converter.data.model.HistoryStore.add(
+                                    src, "", ok = false, error = String(content).trim()
+                                )
+                            } else {
+                                succeeded++
+                                com.watermelon.converter.data.model.HistoryStore.add(
+                                    e.name, String(content), ok = true
+                                )
                             }
                         }
-                        val outName = "batch_${System.currentTimeMillis()}.zip"
-                        val destUri = outputDestUri()
-                        com.watermelon.converter.util.OutputDestination.write(
-                            getApplication(), resultZip, outName, destUri,
-                        )
-                        val savedTo = com.watermelon.converter.util.OutputDestination
-                            .displayLabel(getApplication(), destUri) + "/" + outName
-                        ConvertMarkedResult(succeeded, failed, savedTo)
                     }
+                    val outName = "batch_${System.currentTimeMillis()}.zip"
+                    val destUri = outputDestUri()
+                    com.watermelon.converter.util.OutputDestination.write(
+                        getApplication(), resultZip, outName, destUri,
+                    )
+                    val savedTo = com.watermelon.converter.util.OutputDestination
+                        .displayLabel(getApplication(), destUri) + "/" + outName
+                    ConvertMarkedResult(succeeded, failed, savedTo)
                 }
                 _convertResult.value = outFile
                 MarkedFilesStore.clear()
@@ -322,10 +304,6 @@ class FileManagerViewModel(
             }
         }
     }
-
-    /** Derives an .xml output name from a source .svg name — mirrors FileRepository.xmlNameFor. */
-    private fun xmlNameFor(svgName: String): String =
-        svgName.substringBeforeLast('.', svgName) + ".xml"
 
     fun dismissConvertResult() { _convertResult.value = null }
 
@@ -415,55 +393,37 @@ class FileManagerViewModel(
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    if (files.size == 1) {
-                        // Single file: convert and save raw .xml directly — do not
-                        // round-trip through zip. Fixed 2026-07-22.
-                        val src = files[0]
-                        val svgBytes = src.readBytes()
-                        val xml = native.convertSvg(svgBytes)
-                        com.watermelon.converter.data.model.HistoryStore.add(src.name, xml, ok = true)
-                        val outName = xmlNameFor(src.name)
-                        val destUri = outputDestUri()
-                        com.watermelon.converter.util.OutputDestination.write(
-                            getApplication(), xml.toByteArray(), outName, destUri,
-                            mime = "application/xml",
-                        )
-                        val savedTo = com.watermelon.converter.util.OutputDestination
-                            .displayLabel(getApplication(), destUri) + "/" + outName
-                        ConvertMarkedResult(succeeded = 1, failed = 0, savedTo)
-                    } else {
-                        val zipBytes = zipFiles(files)
-                        val resultZip = native.convertZip(zipBytes, object : com.watermelon.converter.jni.ProgressCallback {
-                            override fun onProgress(done: Int, total: Int, currentName: String) {}
-                        })
-                        var succeeded = 0; var failed = 0
-                        java.util.zip.ZipInputStream(resultZip.inputStream()).use { zis ->
-                            while (true) {
-                                val e = zis.nextEntry ?: break
-                                val content = zis.readBytes()
-                                if (e.name.endsWith(".error.txt")) {
-                                    failed++
-                                    val src = e.name.removeSuffix(".error.txt")
-                                    com.watermelon.converter.data.model.HistoryStore.add(
-                                        src, "", ok = false, error = String(content).trim()
-                                    )
-                                } else {
-                                    succeeded++
-                                    com.watermelon.converter.data.model.HistoryStore.add(
-                                        e.name, String(content), ok = true
-                                    )
-                                }
+                    val zipBytes = zipFiles(files)
+                    val resultZip = native.convertZip(zipBytes, object : com.watermelon.converter.jni.ProgressCallback {
+                        override fun onProgress(done: Int, total: Int, currentName: String) {}
+                    })
+                    var succeeded = 0; var failed = 0
+                    java.util.zip.ZipInputStream(resultZip.inputStream()).use { zis ->
+                        while (true) {
+                            val e = zis.nextEntry ?: break
+                            val content = zis.readBytes()
+                            if (e.name.endsWith(".error.txt")) {
+                                failed++
+                                val src = e.name.removeSuffix(".error.txt")
+                                com.watermelon.converter.data.model.HistoryStore.add(
+                                    src, "", ok = false, error = String(content).trim()
+                                )
+                            } else {
+                                succeeded++
+                                com.watermelon.converter.data.model.HistoryStore.add(
+                                    e.name, String(content), ok = true
+                                )
                             }
                         }
-                        val outName = "batch_${System.currentTimeMillis()}.zip"
-                        val destUri = outputDestUri()
-                        com.watermelon.converter.util.OutputDestination.write(
-                            getApplication(), resultZip, outName, destUri,
-                        )
-                        val savedTo = com.watermelon.converter.util.OutputDestination
-                            .displayLabel(getApplication(), destUri) + "/" + outName
-                        ConvertMarkedResult(succeeded, failed, savedTo)
                     }
+                    val outName = "batch_${System.currentTimeMillis()}.zip"
+                    val destUri = outputDestUri()
+                    com.watermelon.converter.util.OutputDestination.write(
+                        getApplication(), resultZip, outName, destUri,
+                    )
+                    val savedTo = com.watermelon.converter.util.OutputDestination
+                        .displayLabel(getApplication(), destUri) + "/" + outName
+                    ConvertMarkedResult(succeeded, failed, savedTo)
                 }
                 _convertResult.value = result
             } catch (e: Exception) {
