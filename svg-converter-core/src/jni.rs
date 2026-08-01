@@ -5,7 +5,8 @@
 //! Rust JNI side of the FFI bridge (Contract C-3). THIN marshalling only.
 //!
 //! Signatures here MUST match android/.../jni/SvgConverterNative.kt byte-for-byte.
-//! The CI parity checker (ci/verify_interfaces.py) enforces this on every push.
+//! There is currently no automated CI check enforcing this parity — it must
+//! be verified manually on every change to either side.
 //!
 //! STATUS: write + type-check only in CI containers. The real round-trip
 //! (JVM loads the .so, ByteArray<->String, exception throwing, progress
@@ -366,9 +367,9 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
 /// base64-encoded inside the JSON, matching how the Tauri side encodes them
 /// for its own JSON transport (see commands.rs AvdFramesDto), so the two
 /// platforms' wire formats are consistent.
-/// Throws ConversionException (via throw_conversion) on any error,
-/// including UnsupportedFeature while C-5.2's engine is still landing —
-/// that is a normal, catchable error path, not a crash.
+/// Throws ConversionException (via throw_conversion) on any error — e.g.
+/// UnsupportedFeature for an externally-referenced (non-inlined) base
+/// vector — as a normal, catchable error path, not a crash.
 #[no_mangle]
 pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeRenderAvdFrames<
     'a,

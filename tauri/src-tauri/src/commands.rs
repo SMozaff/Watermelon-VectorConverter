@@ -125,10 +125,12 @@ pub fn do_detect_animation(file_bytes: Vec<u8>, is_avd: bool) -> String {
     .to_string()
 }
 
-/// Render an AVD's animation frames (Contract C-5.2). Surfaces
-/// `UnsupportedFeature` (and any other `ConversionError`) as a normal
-/// `Err(ConversionErrorDto)` — this is the expected, catchable result while
-/// the underlying C-5.2 engine is still landing, not a bug in this bridge.
+/// Render an AVD's animation frames (Contract C-5.2). Fully implemented
+/// natively, but not yet wired into the frontend — the Animation Preview
+/// Engine (Contract C-5) is deferred as a premium, post-MVP feature.
+/// Surfaces `UnsupportedFeature` (and any other `ConversionError`) as a
+/// normal `Err(ConversionErrorDto)` — e.g. for an externally-referenced
+/// base vector — a catchable result, not a bug in this bridge.
 pub fn do_render_avd_frames(
     avd_bytes: Vec<u8>,
     fps: u32,

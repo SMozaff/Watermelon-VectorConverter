@@ -29,14 +29,16 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build Rust core (all ABI targets)
+      - name: Run Rust core tests
+        working-directory: svg-converter-core
+        run: cargo test --release
+
+      - name: "Build Rust core (release ABIs only: arm64-v8a, armeabi-v7a)"
         working-directory: svg-converter-core
         run: |
           cargo ndk \
             -t arm64-v8a \
             -t armeabi-v7a \
-            -t x86_64 \
-            -t x86 \
             -o ../android/app/src/main/jniLibs \
             build --release
 
@@ -49,7 +51,7 @@ jobs:
         working-directory: android
         run: chmod +x ./gradlew
 
-      - name: Gradle assemble signed universal release APK
+      - name: Gradle assemble signed per-ABI release APKs
         working-directory: android
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -73,53 +75,62 @@ jobs:
           VERSION=$(grep versionName android/app/build.gradle.kts | grep -o '"[^"]*"' | tr -d '"')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Rename APK file
+      - name: Rename per-ABI APK files
         id: rename
         if: always()
         run: |
-          ORIGINAL="android/app/build/outputs/apk/release/app-release.apk"
-          if [ -f "$ORIGINAL" ]; then
-            NEW_NAME="android/app/build/outputs/apk/release/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_app-release.apk"
-            mv "$ORIGINAL" "$NEW_NAME"
-            echo "apk_path=$NEW_NAME" >> $GITHUB_OUTPUT
-          else
-            echo "apk_path=" >> $GITHUB_OUTPUT
+          DIR="android/app/build/outputs/apk/release"
+          found=0
+          if [ -d "$DIR" ]; then
+            for f in "$DIR"/app-*-release.apk; do
+              [ -f "$f" ] || continue
+              abi=$(basename "$f" | sed -E 's/app-(.*)-release\.apk/\1/')
+              new="$DIR/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_${abi}.apk"
+              mv "$f" "$new"
+              found=1
+            done
           fi
+          echo "apk_dir=$DIR" >> $GITHUB_OUTPUT
+          echo "found=$found" >> $GITHUB_OUTPUT
 
       - name: List APK outputs
         if: always()
         run: find android/app/build/outputs/apk/release/ -name "*.apk" || true
 
-      # Publishes the APK as a downloadable workflow-run artifact regardless
+      # Publishes the APKs as a downloadable workflow-run artifact regardless
       # of whether the run ends up green enough to cut a tagged release.
       # This is what lets you pull down "the last build" even when a later
       # step (or a compile error elsewhere) would otherwise mean nothing was
       # ever published. Kept alongside the release step below — this does
       # NOT replace it, both run.
       - name: Upload APK artifact (always, no release/tag)
-        if: always() && steps.rename.outputs.apk_path != ''
+        if: always() && steps.rename.outputs.found == '1'
         uses: actions/upload-artifact@v4
         with:
           name: android-apk-v${{ steps.version.outputs.version }}-${{ github.run_number }}
-          path: ${{ steps.rename.outputs.apk_path }}
+          path: ${{ steps.rename.outputs.apk_dir }}/*.apk
           retention-days: 14
 
       - name: Create GitHub Release Android
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v${{ steps.version.outputs.version }}
-          name: "Watermelon Vector Converter ${{ steps.version.outputs.version }} Android"
+          # run_number is included so re-running this manually-triggered
+          # workflow before versionName is bumped creates a new tag instead
+          # of colliding with (and, since fail_on_unmatched_files is true,
+          # potentially failing against) a previous run's release.
+          tag_name: android-v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          name: "Watermelon Vector Converter ${{ steps.version.outputs.version }} Android (run ${{ github.run_number }})"
           body: |
             ## Watermelon Vector Converter Android APK
 
-            Signed release APK. Supports all Android processor architectures:
-            - arm64-v8a all modern Android phones (2016+)
-            - armeabi-v7a older Android phones
-            - x86_64 Android emulators, some Chromebooks
-            - x86 older emulators
+            Signed release APKs, split per ABI — download the one matching your device:
+            - arm64-v8a — modern Android phones (2016+)
+            - armeabi-v7a — older Android phones
+
+            x86/x86_64 are emulator-only and are not shipped in release builds.
 
             ### Install
-            1. Download the newly named APK below
+            1. Download the APK matching your device's architecture below
             2. Enable "Install from unknown sources" on your device
             3. Open the APK to install
 
@@ -127,7 +138,7 @@ jobs:
             Also available on Cafebazaar and Myket.
 
             Minimum Android: 8.0 (API 26) Target: Android 15 (API 35)
-          files: ${{ steps.rename.outputs.apk_path }}
+          files: ${{ steps.rename.outputs.apk_dir }}/*.apk
           fail_on_unmatched_files: true
 
   instrumented:
@@ -146,9 +157,12 @@ jobs:
       - name: Clean previous builds
         working-directory: android
         run: ./gradlew clean
-      - name: Build Rust core (all 4 ABIs for reliable testing)
+      # Only x86_64 is needed: the emulator below runs arch: x86_64. Building
+      # the other ABIs here would be wasted CI time since nothing in this
+      # job exercises them.
+      - name: Build Rust core (x86_64, matching the emulator arch)
         working-directory: svg-converter-core
-        run: cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -t x86 -o ../android/app/src/main/jniLibs build --release
+        run: cargo ndk -t x86_64 -o ../android/app/src/main/jniLibs build --release
       - name: Run instrumented tests on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:

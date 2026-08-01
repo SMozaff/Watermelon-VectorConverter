@@ -51,6 +51,20 @@ android {
     sourceSets {
         getByName("main").jniLibs.srcDirs("src/main/jniLibs")
     }
+
+    // Per-ABI splits (Blueprint §1.5 / §8.3): each device downloads a
+    // single-ABI APK instead of one fat APK bundling resvg across every
+    // ABI. Release ships only the two real-device ABIs; x86/x86_64 are
+    // emulator/debug-only per §8.1 and are excluded here (and not built
+    // for release at all — see cargoNdkBuild below).
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
+    }
 }
 
 dependencies {
@@ -89,39 +103,52 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
-// Improved cargo-ndk build task (fixed for CI/testing reliability)
-val cargoNdkBuild by tasks.registering(Exec::class) {
-    workingDir = rootDir.parentFile.resolve("svg-converter-core")
-    val jniLibsDir = file("${projectDir}/src/main/jniLibs")
-    val abiDirs = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+// cargo-ndk build tasks (fixed for CI/testing reliability).
+//
+// Release ABIs are arm64-v8a + armeabi-v7a only (Blueprint §8.1/§8.3:
+// x86/x86_64 are emulator/debug-only and must not ship in release). Debug
+// keeps all 4 ABIs so the emulator (x86_64) and instrumented tests still work.
+val releaseAbis = listOf("arm64-v8a", "armeabi-v7a")
+val debugAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 
-    onlyIf {
-        val isCi = System.getenv("CI") == "true"
-        val shouldRun = isCi || abiDirs.any { abi ->
-            val abiDir = file("$jniLibsDir/$abi")
-            !abiDir.exists() || abiDir.listFiles()?.isEmpty() == true
+fun registerCargoNdkTask(name: String, abis: List<String>) =
+    tasks.register(name, Exec::class) {
+        workingDir = rootDir.parentFile.resolve("svg-converter-core")
+        val jniLibsDir = file("${projectDir}/src/main/jniLibs")
+
+        onlyIf {
+            val isCi = System.getenv("CI") == "true"
+            val shouldRun = isCi || abis.any { abi ->
+                val abiDir = file("$jniLibsDir/$abi")
+                !abiDir.exists() || abiDir.listFiles()?.isEmpty() == true
+            }
+            if (!shouldRun) {
+                println("Skipping cargo-ndk build (libs exist)")
+            }
+            shouldRun
         }
-        if (!shouldRun) {
-            println("Skipping cargo-ndk build (libs exist)")
+
+        val args = mutableListOf("cargo", "ndk")
+        abis.forEach { args.add("-t"); args.add(it) }
+        args.addAll(listOf("-o", "${projectDir}/src/main/jniLibs", "build", "--release"))
+        commandLine(args)
+
+        doLast {
+            if (executionResult.get().exitValue != 0) {
+                throw GradleException("cargo-ndk build failed. Check Rust/Android targets and NDK installation.")
+            }
         }
-        shouldRun
     }
 
-    commandLine(
-        "cargo", "ndk",
-        "-t", "arm64-v8a",
-        "-t", "armeabi-v7a",
-        "-t", "x86_64",
-        "-t", "x86",
-        "-o", "${projectDir}/src/main/jniLibs",
-        "build", "--release"
+val cargoNdkBuildRelease = registerCargoNdkTask("cargoNdkBuildRelease", releaseAbis)
+val cargoNdkBuildDebug = registerCargoNdkTask("cargoNdkBuildDebug", debugAbis)
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(
+        if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }) {
+            cargoNdkBuildRelease
+        } else {
+            cargoNdkBuildDebug
+        }
     )
-
-    doLast {
-        if (executionResult.get().exitValue != 0) {
-            throw GradleException("cargo-ndk build failed. Check Rust/Android targets and NDK installation.")
-        }
-    }
 }
-
-tasks.named("preBuild") { dependsOn(cargoNdkBuild) }
