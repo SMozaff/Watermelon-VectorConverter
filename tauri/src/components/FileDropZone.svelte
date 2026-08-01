@@ -1,21 +1,16 @@
 <script>
-  import { onMount, onDestroy } from "svelte";
+  import { createEventDispatcher, onMount, onDestroy } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { readFile } from "@tauri-apps/plugin-fs";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
 
+  const dispatch = createEventDispatcher();
   /** "svg" | "xml" — which non-zip extension this zone accepts, plus zips of that type. */
-  let {
-    accept = "svg",
-    onsinglefile,
-    onbatchzip,
-    onbatchloose,
-    onerror,
-  } = $props();
+  export let accept = "svg";
 
-  let extWord = $derived(accept === "xml" ? "XML" : "SVG");
+  $: extWord = accept === "xml" ? "XML" : "SVG";
 
-  let dragOver = $state(false);
+  let dragOver = false;
   let unlisten = null;
   // Tauri's native onDragDropEvent has a known bug where a single drop can
   // fire twice with different event IDs (tauri-apps/tauri#14134). Guard
@@ -39,27 +34,27 @@
     for (const zipPath of zips) {
       try {
         const bytes = await readFile(zipPath);
-        onbatchzip?.({ bytes, name: zipPath.split(/[\\/]/).pop() });
+        dispatch("batch-zip", { bytes, name: zipPath.split(/[\\/]/).pop() });
       } catch (e) {
-        onerror?.({ message: e?.message ?? String(e) });
+        dispatch("error", { message: e?.message ?? String(e) });
       }
     }
 
     if (loose.length === 1) {
       try {
         const bytes = await readFile(loose[0]);
-        onsinglefile?.({ bytes, name: loose[0].split(/[\\/]/).pop() });
+        dispatch("single-file", { bytes, name: loose[0].split(/[\\/]/).pop() });
       } catch (e) {
-        onerror?.({ message: e?.message ?? String(e) });
+        dispatch("error", { message: e?.message ?? String(e) });
       }
     } else if (loose.length > 1) {
       try {
         const files = await Promise.all(
           loose.map(async (p) => ({ bytes: await readFile(p), name: p.split(/[\\/]/).pop() }))
         );
-        onbatchloose?.({ files });
+        dispatch("batch-loose", { files });
       } catch (e) {
-        onerror?.({ message: e?.message ?? String(e) });
+        dispatch("error", { message: e?.message ?? String(e) });
       }
     }
   }
@@ -102,10 +97,10 @@
 <div
   class="dropzone"
   class:drag-over={dragOver}
-  onclick={onClick}
+  on:click={onClick}
   role="button"
   tabindex="0"
-  onkeydown={(e) => e.key === "Enter" && onClick()}
+  on:keydown={(e) => e.key === "Enter" && onClick()}
   aria-label="Drop or click to choose files"
 >
   <span class="drop-icon">📂</span>

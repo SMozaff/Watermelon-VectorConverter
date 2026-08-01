@@ -28,6 +28,16 @@ svg-converter-core = { path = "../../svg-converter-core" }
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 
+# core-foundation is a mature, complete crate used only for safe CFString
+# construction/lifetime management. LSSetDefaultRoleHandlerForContentType
+# itself is called via a direct, hand-written extern "C" FFI declaration
+# below (in commands.rs) rather than a Launch-Services binding crate, since
+# the one available crate for that (core-services) documents itself as
+# "woefully incomplete" and isn't worth trusting for a function this
+# specific without being able to verify it on a real Mac first.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

@@ -10,9 +10,9 @@
   function toggleDark()       { settings.update((s) => ({ ...s, darkMode: !s.darkMode })); }
 
   // File association state — Windows only. null = not yet loaded / unsupported.
-  let svgAssoc = $state(null);
-  let xmlAssoc = $state(null);
-  let assocError = $state("");
+  let svgAssoc = null;
+  let xmlAssoc = null;
+  let assocError = "";
 
   onMount(async () => {
     try {
@@ -47,7 +47,7 @@
         <button
           class="chip"
           class:active={$settings.previewSize === px}
-          onclick={() => setPreviewSize(px)}
+          on:click={() => setPreviewSize(px)}
         >{px}px</button>
       {/each}
     </div>
@@ -57,7 +57,7 @@
     <h2 class="group-title">Appearance</h2>
     <p class="group-sub">Toggle between light and dark interface.</p>
     <label class="toggle">
-      <input type="checkbox" checked={$settings.darkMode} onchange={toggleDark} />
+      <input type="checkbox" checked={$settings.darkMode} on:change={toggleDark} />
       <span class="toggle-track"><span class="toggle-thumb"></span></span>
       <span class="toggle-label">{$settings.darkMode ? "Dark mode" : "Light mode"}</span>
     </label>
@@ -69,13 +69,13 @@
       <p class="group-sub">Open these file types with Watermelon Vector Viewer.</p>
 
       <label class="toggle">
-        <input type="checkbox" checked={svgAssoc} onchange={() => toggleAssoc("svg")} />
+        <input type="checkbox" checked={svgAssoc} on:change={() => toggleAssoc("svg")} />
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span class="toggle-label">SVG files</span>
       </label>
 
       <label class="toggle" style="margin-top:12px">
-        <input type="checkbox" checked={xmlAssoc} onchange={() => toggleAssoc("xml")} />
+        <input type="checkbox" checked={xmlAssoc} on:change={() => toggleAssoc("xml")} />
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span class="toggle-label">XML files (VectorDrawable)</span>
       </label>
@@ -87,7 +87,7 @@
   {/if}
 
   <div class="setting-group">
-    <WatermelonButton onclick={() => settings.reset()} label="Reset to defaults" variant="outline" />
+    <WatermelonButton on:click={() => settings.reset()} label="Reset to defaults" variant="outline" />
   </div>
 </section>
 

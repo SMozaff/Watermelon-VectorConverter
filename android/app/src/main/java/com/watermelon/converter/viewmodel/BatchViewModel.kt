@@ -79,17 +79,9 @@ class BatchViewModel(
      * Convert a custom batch of loose SVG files (selected across folders in the
      * file manager). They are zipped in Kotlin and fed to the SAME native
      * convertZip path, so no new FFI surface is introduced.
-     *
-     * Not currently wired to any UI (batch screen only accepts pre-made ZIPs
-     * via convertZip). Guarded here so a future single-file caller doesn't
-     * round-trip through zip — see FileManagerViewModel.convertMarked for the
-     * equivalent fix applied there. 2026-07-22.
      */
     fun convertFromUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        require(uris.size > 1) {
-            "convertFromUris is for multi-file batches; route single files through convertSvg directly"
-        }
         runConvert { repo.zipBytes(uris) }
     }
 

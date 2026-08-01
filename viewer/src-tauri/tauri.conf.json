@@ -53,13 +53,15 @@
         "ext": ["svg"],
         "name": "SVG Image",
         "description": "Scalable Vector Graphics",
-        "role": "Viewer"
+        "role": "Viewer",
+        "mimeType": "image/svg+xml"
       },
       {
         "ext": ["xml"],
         "name": "VectorDrawable XML",
         "description": "Android VectorDrawable",
-        "role": "Viewer"
+        "role": "Viewer",
+        "mimeType": "text/xml"
       }
     ]
   }

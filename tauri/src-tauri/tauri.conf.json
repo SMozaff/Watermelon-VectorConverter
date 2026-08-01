@@ -56,7 +56,12 @@
         "installerHooks": "installer/hooks.nsi"
       },
       "webviewInstallMode": {
-        "type": "embedBootstrapper"
+        "type": "offlineInstaller"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["xdg-utils", "desktop-file-utils"]
       }
     },
     "externalBin": [

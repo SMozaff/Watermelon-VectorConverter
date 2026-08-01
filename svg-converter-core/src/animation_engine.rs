@@ -94,7 +94,7 @@ pub fn render_avd_frames(
 
     for &t in &frame_times {
         let evaluated = evaluate_frame(&doc, t);
-        let png = render_frame(&evaluated, px)?;
+        let png = render_frame(&evaluated, &doc, px)?;
         frames.push(png);
         frame_durations_ms.push(frame_dur);
     }
@@ -116,6 +116,10 @@ pub fn render_avd_frames(
 struct AvdDocument {
     base: AvdNode,
     targets: Vec<AnimationTarget>,
+    viewport_w: f32,
+    viewport_h: f32,
+    width: f32,
+    height: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -264,6 +268,17 @@ fn parse_avd_bundle(avd_bytes: &[u8]) -> Result<AvdDocument, ConversionError> {
             )
         })?;
     let base = parse_vector(&vector_el)?;
+    let viewport_w = android_f32(&vector_el, "viewportWidth").unwrap_or(24.0);
+    let viewport_h = android_f32(&vector_el, "viewportHeight").unwrap_or(24.0);
+    // android:width/height carry a "dp" suffix (e.g. "24dp"); fall back to
+    // the viewport size (matching the forward converter's own convention)
+    // when absent rather than a hardcoded constant.
+    let width = android_attr(&vector_el, "width")
+        .and_then(|s| s.trim_end_matches("dp").trim().parse().ok())
+        .unwrap_or(viewport_w);
+    let height = android_attr(&vector_el, "height")
+        .and_then(|s| s.trim_end_matches("dp").trim().parse().ok())
+        .unwrap_or(viewport_h);
 
     let mut targets = Vec::new();
     for target_el in root
@@ -295,7 +310,7 @@ fn parse_avd_bundle(avd_bytes: &[u8]) -> Result<AvdDocument, ConversionError> {
         }
     }
 
-    Ok(AvdDocument { base, targets })
+    Ok(AvdDocument { base, targets, viewport_w, viewport_h, width, height })
 }
 
 /// Parse a `<set>` / `<objectAnimator>` tree into a flat list of
@@ -756,25 +771,27 @@ fn interpolate_commands(a: &[PathCommand], b: &[PathCommand], t: f32) -> String 
 // Step 5: render a frame -> PNG (via existing pipeline, no new rasterizer)
 // ---------------------------------------------------------------------
 
-fn render_frame(node: &AvdNode, px: u32) -> Result<Vec<u8>, ConversionError> {
-    let normalized = to_normalized_svg(node);
+fn render_frame(node: &AvdNode, doc: &AvdDocument, px: u32) -> Result<Vec<u8>, ConversionError> {
+    let normalized = to_normalized_svg(node, doc);
     let xml = crate::vector_drawable::emit(&normalized);
     crate::image_export::render_vd_preview(&xml, px)
 }
 
 /// Convert the local AvdNode tree (post-evaluation) into the existing
 /// NormalizedSvg shape so the existing emit+rasterize pipeline can be
-/// reused unchanged.
-fn to_normalized_svg(node: &AvdNode) -> NormalizedSvg {
+/// reused unchanged. Uses the AVD's own declared width/height/viewport
+/// (parsed in parse_avd_bundle) rather than a hardcoded size, so
+/// non-24x24 icons render with the correct coordinate space.
+fn to_normalized_svg(node: &AvdNode, doc: &AvdDocument) -> NormalizedSvg {
     let nodes = match node {
         AvdNode::Group(g) => g.children.iter().map(to_vd_node).collect(),
         AvdNode::Path(p) => vec![to_vd_node(&AvdNode::Path(p.clone()))],
     };
     NormalizedSvg {
-        width: 24.0,
-        height: 24.0,
-        viewport_w: 24.0,
-        viewport_h: 24.0,
+        width: doc.width,
+        height: doc.height,
+        viewport_w: doc.viewport_w,
+        viewport_h: doc.viewport_h,
         root_alpha: 1.0,
         nodes,
     }

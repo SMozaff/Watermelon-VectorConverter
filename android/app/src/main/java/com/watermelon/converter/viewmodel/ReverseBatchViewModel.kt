@@ -58,15 +58,9 @@ class ReverseBatchViewModel(
     /**
      * Convert a custom batch of loose XML files (selected across folders in
      * the file manager). Zipped in Kotlin, fed to the native convertVdZip path.
-     *
-     * Not currently wired to any UI. Guarded against future single-file use —
-     * see FileManagerViewModel.zipAndShipSelected for the equivalent fix. 2026-07-22.
      */
     fun convertFromUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        require(uris.size > 1) {
-            "convertFromUris is for multi-file batches; route single files through convertVd directly"
-        }
         runConvert { repo.zipBytes(uris) }
     }
 

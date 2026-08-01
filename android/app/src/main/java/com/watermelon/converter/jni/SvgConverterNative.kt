@@ -7,8 +7,7 @@ package com.watermelon.converter.jni
 
 // FFI bridge — Kotlin side (Contract C-3).
 // Signatures MUST match svg-converter-core/src/jni.rs byte-for-byte.
-// There is currently no automated CI check enforcing this parity — it must
-// be verified manually on every change to either side.
+// Enforced by ci/verify_interfaces.py on every push.
 //
 // STATUS: write-only in CI containers (no JVM/device here). The real
 // round-trip is validated by an on-device instrumented test (Doc 5 §6).
@@ -61,13 +60,11 @@ object SvgConverterNative {
     external fun nativeDetectAnimation(fileBytes: ByteArray, isAvd: Boolean): Int
 
     /**
-     * Render an AVD's animation frames (Contract C-5.2). Fully implemented
-     * natively, but not yet wired into any screen — the Animation Preview
-     * Engine (Contract C-5) is deferred as a premium, post-MVP feature.
-     * Returns a JSON string (see [AvdFramesResult.decode]) or throws
-     * [ConversionException] — e.g. code 1002 (UnsupportedFeature) for an
-     * externally-referenced base vector — as a normal, catchable error,
-     * not a crash.
+     * Render an AVD's animation frames (Contract C-5.2). Returns a JSON
+     * string (see [AvdFramesResult.decode]) or throws [ConversionException]
+     * — including with code 1002 (UnsupportedFeature) until the C-5.2
+     * engine itself is fully implemented; that is a normal, catchable
+     * error, not a crash.
      */
     external fun nativeRenderAvdFrames(avdBytes: ByteArray, fps: Int, maxFrames: Int, px: Int): String
 }
