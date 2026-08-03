@@ -124,11 +124,11 @@ mod tests {
 
     #[test]
     fn static_vector_is_none() {
-        let xml = br#"<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        let xml = br##"<vector xmlns:android="http://schemas.android.com/apk/res/android"
             android:width="24dp" android:height="24dp"
             android:viewportWidth="24" android:viewportHeight="24">
             <path android:pathData="M0,0L24,24" android:fillColor="#000000" />
-        </vector>"#;
+        </vector>"##;
         assert_eq!(detect_animation(xml, FileKind::Avd), AnimationKind::None);
     }
 
@@ -181,9 +181,9 @@ mod tests {
 
     #[test]
     fn static_svg_is_none() {
-        let xml = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        let xml = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
             <rect width="10" height="10" fill="#ff0000" />
-        </svg>"#;
+        </svg>"##;
         assert_eq!(detect_animation(xml, FileKind::Svg), AnimationKind::None);
     }
 
