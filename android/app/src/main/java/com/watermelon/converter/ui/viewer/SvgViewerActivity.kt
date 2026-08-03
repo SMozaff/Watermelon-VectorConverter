@@ -15,9 +15,9 @@
 
 package com.watermelon.converter.ui.viewer
 
-import android.animation.AnimationDrawable
+import android.graphics.drawable.AnimationDrawable
 import android.graphics.Bitmap
-import android.graphics.BitmapDrawable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
