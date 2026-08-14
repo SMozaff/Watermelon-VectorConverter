@@ -34,16 +34,15 @@ and flexible export — entirely offline, with zero network calls.
 - **One shared core.** A single high-performance Rust engine (`svg-converter-core`) drives every platform, so conversion behaves identically everywhere.
 - **Smart batching.** Drop a single file for an instant conversion, drop several loose files or a ZIP for a batch job — each ZIP you select produces its own independent output.
 - **Dual preview.** See the original file and the generated result side by side (both rendered approximately via resvg).
-- **Multiplatform.** Native Android (Jetpack Compose), native-feeling desktop (Tauri) for Windows and Linux, and a lightweight companion viewer for opening SVG/VectorDrawable files directly from the file system.
+- **Multiplatform.** Native Android (Jetpack Compose) and a native iced desktop application for Windows and Linux. The desktop binary opens the converter by default and switches to a lightweight viewer when launched with an SVG or VectorDrawable file.
 
 ## Platforms
 
 | Platform | UI | Status |
 |----------|----|--------|
 | Android (8.0+) | Jetpack Compose + Material 3 | Native |
-| Windows 10/11 | Tauri (Svelte frontend) | Desktop |
-| Linux | Tauri (Svelte frontend) | Desktop |
-| Desktop viewer (`wvgc-viewer`) | Tauri (Svelte frontend) | Companion app — registers as the default handler for `.svg`/`.xml` so double-clicking a file opens a lightweight preview window instead of the full converter |
+| Windows 10/11 | Native iced desktop binary | Desktop converter and phase-one viewer |
+| Linux | Native iced desktop binary | Desktop converter and phase-one viewer |
 
 ## Architecture
 
@@ -57,8 +56,7 @@ pipeline in both directions.
 svg-converter-core (Rust)   ← SVG↔VectorDrawable parsing, conversion, rendering, batch
         │
         ├── JNI bridge       → Android (Kotlin + Jetpack Compose)
-        └── Tauri commands   → Desktop converter app (Windows / Linux)
-                              → Desktop viewer app (wvgc-viewer, shares the same core)
+        └── Native iced app  → Desktop converter and file viewer (Windows / Linux)
 ```
 
 The project follows an **Interface-First Execution Methodology**: interface
@@ -74,9 +72,9 @@ Watermelon-VectorConverter/
 ├── svg-converter-core/   Rust core: SVG↔VectorDrawable parsing, conversion,
 │                         preview rendering, batch processing, analysis, FFI
 ├── android/              Android app (Compose UI, ViewModels, JNI bridge)
-├── tauri/                Desktop converter app (Tauri backend + Svelte frontend)
-├── viewer/               Desktop companion viewer (separate Tauri binary,
-│                         wvgc-viewer — file-association handler for .svg/.xml)
+├── desktop/              Native iced desktop converter/viewer binary
+├── tauri/                Legacy Tauri desktop sources retained during migration
+├── viewer/               Legacy companion viewer sources retained during migration
 └── .github/workflows/    CI pipeline
 ```
 

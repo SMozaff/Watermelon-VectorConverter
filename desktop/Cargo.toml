@@ -1,0 +1,46 @@
+# Watermelon Vector Converter — Desktop (native, no WebView/Tauri)
+# Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
+#
+# Replaces the former tauri/ and viewer/ crates entirely. Both are now one
+# native iced application with two modes (converter, viewer) selected by
+# how the binary is invoked — see main.rs. No WebView2/WebKitGTK/Tauri
+# dependency anywhere: this is a real native GUI, using iced's own wgpu/
+# tiny-skia renderer, not a browser engine.
+
+[package]
+name = "wvgc-desktop"
+version = "0.2.0"
+edition = "2021"
+authors = ["Suhail Muzaffari <so.muzaff@gmail.com>"]
+license = "LicenseRef-Proprietary"
+
+[[bin]]
+name = "wvgc-desktop"
+path = "src/main.rs"
+
+[dependencies]
+iced = { version = "0.14", features = ["image", "tokio"] }
+# Native file/folder dialogs — the standard pairing for iced, since iced
+# itself has no built-in dialog widget. Async API used via iced::Task.
+rfd = "0.15"
+svg-converter-core = { path = "../svg-converter-core" }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Single-instance behavior (re-opening a file while already running should
+# focus the existing window, not spawn a second process) needs a small
+# cross-process lock; single-instance itself only ships a Tauri plugin, so
+# this is done directly with a lock file + a local TCP loopback listener for
+# the "tell the running instance to open this file" signal — see
+# single_instance.rs.
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
+# core-foundation is a mature, complete crate used only for safe CFString
+# construction/lifetime management. LSSetDefaultRoleHandlerForContentType
+# itself is called via a direct, hand-written extern "C" FFI declaration
+# (in file_assoc/macos.rs) rather than a Launch-Services binding crate,
+# since the one available crate for that (core-services) documents itself
+# as "woefully incomplete" and isn't worth trusting for a function this
+# specific without being able to verify it on a real Mac first.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
