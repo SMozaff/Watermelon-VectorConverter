@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-convert-svg"
+description = "Enables the convert_svg command without any pre-configured scope."
+commands.allow = ["convert_svg"]
+
+[[permission]]
+identifier = "deny-convert-svg"
+description = "Denies the convert_svg command without any pre-configured scope."
+commands.deny = ["convert_svg"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-file-association"
+description = "Enables the get_file_association command without any pre-configured scope."
+commands.allow = ["get_file_association"]
+
+[[permission]]
+identifier = "deny-get-file-association"
+description = "Denies the get_file_association command without any pre-configured scope."
+commands.deny = ["get_file_association"]

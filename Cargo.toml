@@ -6,6 +6,10 @@ members = [
     "svg-converter-core",
     "desktop",
 ]
+exclude = [
+    "tauri/src-tauri",
+    "viewer/src-tauri",
+]
 
 [workspace.package]
 version = "0.1.0"

@@ -57,7 +57,7 @@ jobs:
 
       - name: Install viewer frontend dependencies
         working-directory: viewer
-        run: npm install
+        run: npm ci
 
       - name: Build viewer frontend
         working-directory: viewer
@@ -76,7 +76,7 @@ jobs:
 
       - name: Install converter frontend dependencies
         working-directory: tauri
-        run: npm install
+        run: npm ci
 
       - name: Build converter (embeds viewer via externalBin)
         working-directory: tauri

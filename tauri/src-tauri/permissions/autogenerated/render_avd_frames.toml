@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-avd-frames"
+description = "Enables the render_avd_frames command without any pre-configured scope."
+commands.allow = ["render_avd_frames"]
+
+[[permission]]
+identifier = "deny-render-avd-frames"
+description = "Denies the render_avd_frames command without any pre-configured scope."
+commands.deny = ["render_avd_frames"]

@@ -19,6 +19,10 @@ use std::time::Duration;
 use svg_converter_core::animation::{detect_animation, AnimationKind, FileKind};
 
 #[derive(Debug, Clone)]
+#[expect(
+    dead_code,
+    reason = "file-arrival routing is retained for the single-instance integration"
+)]
 pub enum Message {
     OpenFilePicked(Option<PathBuf>),
     OpenFileRequested,
@@ -49,6 +53,10 @@ pub enum LoadedFile {
     },
 }
 
+#[expect(
+    dead_code,
+    reason = "empty viewer state is retained for startup and reset behavior"
+)]
 enum ViewState {
     Empty,
     Loading,

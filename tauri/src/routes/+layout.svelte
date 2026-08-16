@@ -3,6 +3,10 @@
   import Nav from "../components/Nav.svelte";
   import AssocNoticeModal from "../components/AssocNoticeModal.svelte";
   import { settings } from "../lib/settings";
+
+  function hideMissingImage(event) {
+    event.currentTarget.style.display = "none";
+  }
 </script>
 
 <div class="shell" class:dark={$settings.darkMode}>
@@ -10,7 +14,7 @@
   <div class="main-wrap">
     <!-- Top banner: replace src with your PNG asset path -->
     <div class="top-banner">
-      <img src="/banner.png" alt="" class="banner-img" onerror="this.style.display='none'" />
+      <img src="/banner.png" alt="" class="banner-img" onerror={hideMissingImage} />
       <span class="banner-title">Watermelon Vector Converter</span>
     </div>
     <main class="content">

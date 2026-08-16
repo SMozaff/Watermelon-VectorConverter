@@ -6,8 +6,10 @@
 //! Phase 1: C-5.1 Animation Detection only. AVD frame rendering (C-5.2) and
 //! the FFI bridges (C-5.3/C-5.4) are later phases and are NOT implemented
 //! here. Detection is pure, deterministic, and must never panic or throw:
-//! any unparseable input falls through to `AnimationKind::None`, which
-//! routes to the existing static preview path unchanged.
+//! any unparseable or over-budget input falls through to `AnimationKind::None`,
+//! which routes to the existing static preview path unchanged.
+
+use crate::limits;
 
 /// Which raw-file family the caller is asking about, since the same bytes
 /// could otherwise be ambiguous between an AVD-style XML and a plain SVG.
@@ -38,12 +40,15 @@ pub enum AnimationKind {
 /// failure must fall through to the existing static path (or existing
 /// error path) unchanged, per the frozen contract.
 pub fn detect_animation(file_bytes: &[u8], file_kind: FileKind) -> AnimationKind {
+    if limits::ensure_input_size(file_bytes, "animation detection input").is_err() {
+        return AnimationKind::None;
+    }
     let text = match std::str::from_utf8(file_bytes) {
         Ok(t) => t,
         Err(_) => return AnimationKind::None,
     };
 
-    let doc = match roxmltree::Document::parse(text) {
+    let doc = match roxmltree::Document::parse_with_options(text, limits::xml_options()) {
         Ok(d) => d,
         Err(_) => return AnimationKind::None,
     };
@@ -90,7 +95,13 @@ fn detect_svg(root: &roxmltree::Node) -> AnimationKind {
     AnimationKind::None
 }
 
-const SMIL_TAGS: &[&str] = &["animate", "animateTransform", "animateMotion", "animateColor", "set"];
+const SMIL_TAGS: &[&str] = &[
+    "animate",
+    "animateTransform",
+    "animateMotion",
+    "animateColor",
+    "set",
+];
 
 fn has_smil_descendant(root: &roxmltree::Node) -> bool {
     root.descendants()
@@ -106,7 +117,7 @@ fn has_css_keyframes(root: &roxmltree::Node) -> bool {
     root.descendants().any(|n| {
         n.is_element()
             && n.tag_name().name() == "style"
-            && n.text().map_or(false, |t| t.contains("@keyframes"))
+            && n.text().is_some_and(|text| text.contains("@keyframes"))
     })
 }
 

@@ -7,21 +7,28 @@
 //! #[tauri::command] wrappers are thin delegation only.
 
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
+use std::sync::atomic::AtomicBool;
+use svg_converter_core::animation::{AnimationKind, FileKind};
+use svg_converter_core::animation_engine::{AnimationFrames, LoopMode};
 use svg_converter_core::batch_processor::{
-    convert_zip as core_convert_zip, convert_vd_zip as core_convert_vd_zip,
-    zip_files_into_archive, ProgressEvent,
+    convert_vd_zip as core_convert_vd_zip, convert_zip as core_convert_zip, zip_files_into_archive,
+    ProgressEvent,
 };
 use svg_converter_core::convert_svg as core_convert_svg;
 use svg_converter_core::convert_vd as core_convert_vd;
+use svg_converter_core::detect_animation as core_detect_animation;
 use svg_converter_core::error::ConversionError;
 use svg_converter_core::image_export::{
     render_svg_preview as core_render_svg, render_vd_preview as core_render_vd,
 };
-use svg_converter_core::animation::{AnimationKind, FileKind};
-use svg_converter_core::animation_engine::{AnimationFrames, LoopMode};
-use svg_converter_core::detect_animation as core_detect_animation;
+use svg_converter_core::limits::{
+    MAX_SINGLE_INPUT_BYTES, MAX_ZIP_INPUT_BYTES, MAX_ZIP_OUTPUT_BYTES,
+};
 use svg_converter_core::render_avd_frames as core_render_avd_frames;
-use std::sync::atomic::AtomicBool;
+
+const MAX_NATIVE_OUTPUT_BYTES: usize = MAX_ZIP_OUTPUT_BYTES;
 use tauri::Emitter;
 
 // ── Error DTO ────────────────────────────────────────────────────────────────
@@ -138,6 +145,126 @@ pub fn do_render_avd_frames(
     core_render_avd_frames(&avd_bytes, fps, max_frames, px)
         .map(Into::into)
         .map_err(Into::into)
+}
+
+/// Bytes returned only from a native-dialog file selection. The frontend never
+/// supplies a path to this command, which prevents arbitrary webview content
+/// from turning the Rust backend into a filesystem read primitive.
+#[derive(Debug, Serialize)]
+pub struct PickedInputFile {
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
+fn command_error(code: u16, message: impl Into<String>) -> ConversionErrorDto {
+    ConversionErrorDto {
+        code,
+        message: message.into(),
+    }
+}
+
+fn safe_file_name(name: &str) -> Result<&str, ConversionErrorDto> {
+    let path = Path::new(name);
+    let is_single_normal_component = path.components().count() == 1
+        && path.file_name().and_then(|value| value.to_str()) == Some(name);
+    if name.is_empty() || !is_single_normal_component {
+        return Err(command_error(
+            1008,
+            "output name must be a single file name",
+        ));
+    }
+    Ok(name)
+}
+
+fn input_limit_for(path: &Path) -> u64 {
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"))
+    {
+        MAX_ZIP_INPUT_BYTES as u64
+    } else {
+        MAX_SINGLE_INPUT_BYTES as u64
+    }
+}
+
+fn read_dialog_selected_file(path: &Path) -> Result<PickedInputFile, ConversionErrorDto> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| {
+        command_error(1005, format!("could not inspect selected file: {error}"))
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(command_error(1005, "selected path is not a regular file"));
+    }
+    let input_limit = input_limit_for(path);
+    if metadata.len() > input_limit {
+        return Err(command_error(
+            1008,
+            format!(
+                "selected file exceeds the {} MiB input limit",
+                input_limit / 1024 / 1024
+            ),
+        ));
+    }
+    let bytes = fs::read(path)
+        .map_err(|error| command_error(1005, format!("could not read selected file: {error}")))?;
+    if bytes.len() as u64 > input_limit {
+        return Err(command_error(
+            1008,
+            "selected file grew beyond the input limit while reading",
+        ));
+    }
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| command_error(1005, "selected file name is not valid UTF-8"))?
+        .to_owned();
+    Ok(PickedInputFile { name, bytes })
+}
+
+/// Display a native file picker and return bounded byte buffers. The caller
+/// selects only one accepted content family, so no path crosses IPC.
+#[tauri::command]
+pub fn pick_input_files(kind: String) -> Result<Vec<PickedInputFile>, ConversionErrorDto> {
+    let paths = match kind.as_str() {
+        "svg" => rfd::FileDialog::new()
+            .add_filter("SVG or ZIP", &["svg", "zip"])
+            .pick_files(),
+        "xml" => rfd::FileDialog::new()
+            .add_filter("VectorDrawable XML or ZIP", &["xml", "zip"])
+            .pick_files(),
+        _ => return Err(command_error(1000, "unsupported file selection kind")),
+    };
+
+    paths
+        .unwrap_or_default()
+        .iter()
+        .map(|path| read_dialog_selected_file(path))
+        .collect()
+}
+
+/// Display a native save dialog and write a bounded output buffer. The output
+/// path remains in the Rust backend and is never supplied by the webview.
+#[tauri::command]
+pub fn save_output_file(
+    suggested_name: String,
+    bytes: Vec<u8>,
+) -> Result<bool, ConversionErrorDto> {
+    let suggested_name = safe_file_name(&suggested_name)?;
+    if bytes.len() > MAX_NATIVE_OUTPUT_BYTES {
+        return Err(command_error(
+            1008,
+            "generated output exceeds the 200 MiB export limit",
+        ));
+    }
+    let Some(path) = rfd::FileDialog::new()
+        .set_file_name(suggested_name)
+        .save_file()
+    else {
+        return Ok(false);
+    };
+    fs::write(path, bytes)
+        .map_err(|error| command_error(1005, format!("could not write output file: {error}")))?;
+    Ok(true)
 }
 
 // ── Tauri command wrappers ───────────────────────────────────────────────────
@@ -264,28 +391,46 @@ pub fn zip_loose_files(files: Vec<LooseFile>) -> Result<Vec<u8>, ConversionError
     zip_files_into_archive(&pairs).map_err(Into::into)
 }
 
-/// Open a URL in the system default browser.
+fn validate_external_url(url: &str) -> Result<(), ConversionErrorDto> {
+    const PROJECT_URL: &str = "https://github.com/muzaff-beep/Watermelon-VectorConverter";
+    const CONTACT_URL: &str = "mailto:so.muzaff@gmail.com";
+    if url == PROJECT_URL || url == CONTACT_URL {
+        Ok(())
+    } else {
+        Err(command_error(1000, "unapproved external URL"))
+    }
+}
+
+/// Open one of the application-owned URLs in the system default browser.
 #[tauri::command]
 pub fn open_url(url: String) -> Result<(), ConversionErrorDto> {
-    // Use the opener crate via tauri-plugin-shell if available,
-    // otherwise fall back to std::process::Command.
+    validate_external_url(&url)?;
     #[cfg(target_os = "windows")]
     std::process::Command::new("cmd")
         .args(["/c", "start", "", &url])
         .spawn()
-        .map_err(|e| ConversionErrorDto { code: 1099, message: e.to_string() })?;
+        .map_err(|e| ConversionErrorDto {
+            code: 1099,
+            message: e.to_string(),
+        })?;
 
     #[cfg(target_os = "macos")]
     std::process::Command::new("open")
         .arg(&url)
         .spawn()
-        .map_err(|e| ConversionErrorDto { code: 1099, message: e.to_string() })?;
+        .map_err(|e| ConversionErrorDto {
+            code: 1099,
+            message: e.to_string(),
+        })?;
 
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open")
         .arg(&url)
         .spawn()
-        .map_err(|e| ConversionErrorDto { code: 1099, message: e.to_string() })?;
+        .map_err(|e| ConversionErrorDto {
+            code: 1099,
+            message: e.to_string(),
+        })?;
 
     Ok(())
 }
@@ -295,27 +440,40 @@ pub fn open_url(url: String) -> Result<(), ConversionErrorDto> {
 /// handler via xdg-mime + a self-authored .desktop file on Linux.
 #[tauri::command]
 pub fn set_file_association(ext: String, enabled: bool) -> Result<(), ConversionErrorDto> {
+    if !matches!(ext.as_str(), "svg" | "xml") {
+        return Err(command_error(
+            1000,
+            "unsupported file association extension",
+        ));
+    }
     #[cfg(windows)]
     {
-        windows_assoc::set_association(&ext, enabled)
-            .map_err(|e| ConversionErrorDto { code: 1098, message: e.to_string() })
+        windows_assoc::set_association(&ext, enabled).map_err(|e| ConversionErrorDto {
+            code: 1098,
+            message: e.to_string(),
+        })
     }
     #[cfg(target_os = "macos")]
     {
-        macos_assoc::set_association(&ext, enabled)
-            .map_err(|message| ConversionErrorDto { code: 1098, message })
+        macos_assoc::set_association(&ext, enabled).map_err(|message| ConversionErrorDto {
+            code: 1098,
+            message,
+        })
     }
     #[cfg(target_os = "linux")]
     {
-        linux_assoc::set_association(&ext, enabled)
-            .map_err(|e| ConversionErrorDto { code: 1098, message: e.to_string() })
+        linux_assoc::set_association(&ext, enabled).map_err(|e| ConversionErrorDto {
+            code: 1098,
+            message: e.to_string(),
+        })
     }
     #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         let _ = (ext, enabled);
         Err(ConversionErrorDto {
             code: 1098,
-            message: "File association toggling is only supported on Windows, macOS, and Linux.".into(),
+            message: "File association toggling is only supported on Windows, macOS, and Linux."
+                .into(),
         })
     }
 }
@@ -324,6 +482,9 @@ pub fn set_file_association(ext: String, enabled: bool) -> Result<(), Conversion
 /// extension. Always false on unsupported platforms.
 #[tauri::command]
 pub fn get_file_association(ext: String) -> bool {
+    if !matches!(ext.as_str(), "svg" | "xml") {
+        return false;
+    }
     #[cfg(windows)]
     {
         windows_assoc::is_associated(&ext)
@@ -357,7 +518,8 @@ mod windows_assoc {
     /// is the per-user override Explorer checks first.
     pub fn set_association(ext: &str, enabled: bool) -> std::io::Result<()> {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let classes = hkcu.open_subkey_with_flags("Software\\Classes", KEY_ALL_ACCESS)
+        let classes = hkcu
+            .open_subkey_with_flags("Software\\Classes", KEY_ALL_ACCESS)
             .or_else(|_| hkcu.create_subkey("Software\\Classes").map(|(k, _)| k))?;
 
         let exe_path = std::env::current_exe()?
@@ -383,7 +545,9 @@ mod windows_assoc {
         } else {
             let ext_path = format!(".{}", ext);
             if let Ok(ext_key) = classes.open_subkey_with_flags(&ext_path, KEY_ALL_ACCESS) {
-                if let Ok(progids_key) = ext_key.open_subkey_with_flags("OpenWithProgids", KEY_ALL_ACCESS) {
+                if let Ok(progids_key) =
+                    ext_key.open_subkey_with_flags("OpenWithProgids", KEY_ALL_ACCESS)
+                {
                     let _ = progids_key.delete_value(PROG_ID);
                 }
             }
@@ -397,7 +561,12 @@ mod windows_assoc {
             }
             const SHCNE_ASSOCCHANGED: i32 = 0x08000000;
             const SHCNF_IDLIST: u32 = 0;
-            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, std::ptr::null(), std::ptr::null());
+            SHChangeNotify(
+                SHCNE_ASSOCCHANGED,
+                SHCNF_IDLIST,
+                std::ptr::null(),
+                std::ptr::null(),
+            );
         }
 
         Ok(())
@@ -481,7 +650,9 @@ mod macos_assoc {
             // wrap_under_create_rule takes ownership of the +1 reference
             // UTTypeCreatePreferredIdentifierForTag returns, so CFRelease
             // is handled by CFString's own Drop — do not release it again.
-            Some(CFString::wrap_under_create_rule(uti_ref as core_foundation::string::CFStringRef))
+            Some(CFString::wrap_under_create_rule(
+                uti_ref as core_foundation::string::CFStringRef,
+            ))
         }
     }
 
@@ -495,7 +666,11 @@ mod macos_assoc {
         // Finder's bundle ID is the standard approach other tools use;
         // since Finder is always present, this is a safe, universal
         // fallback rather than leaving the extension in an undefined state.
-        let target_bundle_id = if enabled { VIEWER_BUNDLE_ID } else { "com.apple.finder" };
+        let target_bundle_id = if enabled {
+            VIEWER_BUNDLE_ID
+        } else {
+            "com.apple.finder"
+        };
         let bundle_id_cf = CFString::new(target_bundle_id);
 
         let status = unsafe {
@@ -509,7 +684,9 @@ mod macos_assoc {
         if status == 0 {
             Ok(())
         } else {
-            Err(format!("LSSetDefaultRoleHandlerForContentType failed with OSStatus {status}"))
+            Err(format!(
+                "LSSetDefaultRoleHandlerForContentType failed with OSStatus {status}"
+            ))
         }
     }
 
@@ -526,7 +703,9 @@ mod macos_assoc {
             if handler_ref.is_null() {
                 return false;
             }
-            let handler = CFString::wrap_under_create_rule(handler_ref as core_foundation::string::CFStringRef);
+            let handler = CFString::wrap_under_create_rule(
+                handler_ref as core_foundation::string::CFStringRef,
+            );
             handler.to_string() == VIEWER_BUNDLE_ID
         }
     }
@@ -546,7 +725,6 @@ mod linux_assoc {
     use std::process::Command;
 
     const DESKTOP_FILE_NAME: &str = "watermelon-vector-viewer.desktop";
-    const APP_ID: &str = "watermelon-vector-viewer";
 
     fn mime_type_for(ext: &str) -> &'static str {
         match ext {
@@ -576,7 +754,10 @@ mod linux_assoc {
     fn viewer_exe_path() -> io::Result<PathBuf> {
         let current = std::env::current_exe()?;
         let dir = current.parent().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, "could not resolve executable directory")
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "could not resolve executable directory",
+            )
         })?;
         Ok(dir.join("wvgc-viewer"))
     }
@@ -673,7 +854,8 @@ mod linux_assoc {
                 .lines()
                 .filter(|line| {
                     let trimmed = line.trim();
-                    !(trimmed.starts_with(&format!("{mime}=")) && trimmed.contains(DESKTOP_FILE_NAME))
+                    !(trimmed.starts_with(&format!("{mime}="))
+                        && trimmed.contains(DESKTOP_FILE_NAME))
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
@@ -697,5 +879,31 @@ mod linux_assoc {
             }
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::{safe_file_name, validate_external_url};
+
+    #[test]
+    fn output_name_must_not_contain_a_path() {
+        assert!(safe_file_name("result.svg").is_ok());
+        assert!(safe_file_name("../result.svg").is_err());
+        assert!(safe_file_name("nested/result.svg").is_err());
+        assert!(safe_file_name("").is_err());
+    }
+
+    #[test]
+    fn external_url_is_strictly_allowlisted() {
+        assert!(
+            validate_external_url("https://github.com/muzaff-beep/Watermelon-VectorConverter")
+                .is_ok()
+        );
+        assert!(validate_external_url("https://example.invalid").is_err());
+        assert!(validate_external_url(
+            "https://github.com/muzaff-beep/Watermelon-VectorConverter?x=1"
+        )
+        .is_err());
     }
 }

@@ -1,0 +1,55 @@
+name: Quality and Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust-core:
+    name: Rust core checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy,rustfmt
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+      - name: Run workspace tests
+        run: cargo test --workspace --all-targets
+      - name: Run strict lint checks
+        run: cargo clippy --workspace -- -D warnings
+      - name: Check Tauri privilege regressions
+        run: scripts/check_tauri_security.sh
+      - name: Install RustSec auditor
+        run: cargo install cargo-audit --locked
+      - name: Scan Rust dependencies
+        run: cargo audit
+
+  frontends:
+    name: Reproducible frontend bundles
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [tauri, viewer]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=low
+      - name: Build production bundle
+        run: npm run build

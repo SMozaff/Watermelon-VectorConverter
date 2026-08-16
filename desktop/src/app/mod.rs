@@ -38,6 +38,10 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
 /// doesn't need to depend on the core crate's internal module path in
 /// every match arm — kept in exact 1:1 correspondence with the real enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    dead_code,
+    reason = "reserved UI mapping for future animated-preview controls"
+)]
 pub enum AnimKind {
     None,
     Avd,

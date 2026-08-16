@@ -31,11 +31,7 @@
             "main"
           ],
           "permissions": [
-            "core:default",
-            "dialog:allow-open",
-            "dialog:allow-save",
-            "fs:read-all",
-            "fs:write-all"
+            "core:default"
           ]
         }
       ]

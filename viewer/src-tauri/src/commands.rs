@@ -1,12 +1,13 @@
-// Watermelon Vector Viewer
 // Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
 
 use crate::PendingFile;
 use serde::Serialize;
 use std::fs;
+use std::path::Path;
 use svg_converter_core::animation::{AnimationKind, FileKind};
 use svg_converter_core::detect_animation;
 use svg_converter_core::image_export::{render_svg_preview, render_vd_preview};
+use svg_converter_core::limits::MAX_SINGLE_INPUT_BYTES;
 use svg_converter_core::render_avd_frames;
 use tauri::State;
 
@@ -16,21 +17,21 @@ pub struct ViewerErrorDto {
 }
 
 impl From<std::io::Error> for ViewerErrorDto {
-    fn from(e: std::io::Error) -> Self {
-        ViewerErrorDto { message: e.to_string() }
+    fn from(error: std::io::Error) -> Self {
+        ViewerErrorDto {
+            message: error.to_string(),
+        }
     }
 }
 
 impl From<svg_converter_core::error::ConversionError> for ViewerErrorDto {
-    fn from(e: svg_converter_core::error::ConversionError) -> Self {
-        ViewerErrorDto { message: e.to_string() }
+    fn from(error: svg_converter_core::error::ConversionError) -> Self {
+        ViewerErrorDto {
+            message: error.to_string(),
+        }
     }
 }
 
-/// One frame-set entry, mirroring AnimationFrames. Frame PNGs are plain
-/// Vec<u8> (serde_json serializes each as a JSON number array), matching
-/// the same convention the main app's AvdFramesDto already uses — no
-/// base64 needed on this side of the IPC boundary.
 #[derive(Debug, Serialize)]
 pub struct AvdFramesPayload {
     pub width: u32,
@@ -40,43 +41,75 @@ pub struct AvdFramesPayload {
     pub frames: Vec<Vec<u8>>,
 }
 
-/// Tagged result covering all three Contract C-5 outcomes. The frontend
-/// branches on `kind` to decide how to render: a plain <img> for Static, a
-/// canvas + setTimeout playback loop for Avd, or a sandboxed inline-SVG
-/// render for AnimatedSvg.
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
 pub enum FilePreviewDto {
     Static { png: Vec<u8> },
     Avd { frames: AvdFramesPayload },
-    /// Raw SVG text — Contract C-5.5 explicitly hands this to the existing
-    /// webview frontend with no native rendering at all, so we return the
-    /// file's own text unchanged rather than any rendered form of it.
     AnimatedSvg { svg_text: String },
 }
 
-/// Read a file from disk, detect whether it's a raw SVG or a VectorDrawable
-/// XML, detect whether either is animated (Contract C-5.1), and return
-/// whichever of the three C-5 preview forms applies.
-#[tauri::command]
-pub fn render_file_preview(path: String, px: u32) -> Result<FilePreviewDto, ViewerErrorDto> {
-    let bytes = fs::read(&path).map_err(ViewerErrorDto::from)?;
-    let content = String::from_utf8_lossy(&bytes).into_owned();
+/// A preview result has a display name but never exposes the source path to
+/// the webview. This keeps user filesystem paths out of the IPC surface.
+#[derive(Debug, Serialize)]
+pub struct PreviewResponse {
+    pub name: String,
+    pub preview: FilePreviewDto,
+}
 
-    // VectorDrawable XML starts with <vector ...>, plain SVG starts with <svg ...>.
-    // Check the root tag rather than the file extension, since a user could
-    // rename either type.
+fn bounded_regular_file(path: &Path) -> Result<(String, Vec<u8>), ViewerErrorDto> {
+    let metadata = fs::symlink_metadata(path).map_err(ViewerErrorDto::from)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(ViewerErrorDto {
+            message: "selected path is not a regular file".into(),
+        });
+    }
+    if metadata.len() > MAX_SINGLE_INPUT_BYTES as u64 {
+        return Err(ViewerErrorDto {
+            message: format!(
+                "selected file exceeds the {} MiB input limit",
+                MAX_SINGLE_INPUT_BYTES / 1024 / 1024
+            ),
+        });
+    }
+    let bytes = fs::read(path).map_err(ViewerErrorDto::from)?;
+    if bytes.len() > MAX_SINGLE_INPUT_BYTES {
+        return Err(ViewerErrorDto {
+            message: "selected file grew beyond the input limit while reading".into(),
+        });
+    }
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| ViewerErrorDto {
+            message: "selected file name is not valid UTF-8".into(),
+        })?
+        .to_owned();
+    Ok((name, bytes))
+}
+
+fn preview_path(path: &Path, px: u32) -> Result<PreviewResponse, ViewerErrorDto> {
+    let (name, bytes) = bounded_regular_file(path)?;
+    let content = String::from_utf8(bytes.clone()).map_err(|error| ViewerErrorDto {
+        message: format!("selected file is not valid UTF-8: {error}"),
+    })?;
+
     let trimmed = content.trim_start();
     let is_vector_drawable = trimmed
         .lines()
-        .find(|l| !l.trim().is_empty() && !l.trim_start().starts_with("<?xml"))
-        .map(|l| l.trim_start().starts_with("<vector") || l.trim_start().starts_with("<animated-vector"))
+        .find(|line| !line.trim().is_empty() && !line.trim_start().starts_with("<?xml"))
+        .map(|line| {
+            line.trim_start().starts_with("<vector")
+                || line.trim_start().starts_with("<animated-vector")
+        })
         .unwrap_or(false);
 
-    let file_kind = if is_vector_drawable { FileKind::Avd } else { FileKind::Svg };
-    let anim_kind = detect_animation(&bytes, file_kind);
-
-    match anim_kind {
+    let file_kind = if is_vector_drawable {
+        FileKind::Avd
+    } else {
+        FileKind::Svg
+    };
+    let preview = match detect_animation(&bytes, file_kind) {
         AnimationKind::Avd => {
             let frames = render_avd_frames(&bytes, 30, 90, px).map_err(ViewerErrorDto::from)?;
             let loop_mode = match frames.loop_mode {
@@ -84,7 +117,7 @@ pub fn render_file_preview(path: String, px: u32) -> Result<FilePreviewDto, View
                 svg_converter_core::animation_engine::LoopMode::Repeat => "Repeat",
                 svg_converter_core::animation_engine::LoopMode::Reverse => "Reverse",
             };
-            Ok(FilePreviewDto::Avd {
+            FilePreviewDto::Avd {
                 frames: AvdFramesPayload {
                     width: frames.width,
                     height: frames.height,
@@ -92,10 +125,10 @@ pub fn render_file_preview(path: String, px: u32) -> Result<FilePreviewDto, View
                     frame_durations_ms: frames.frame_durations_ms,
                     frames: frames.frames,
                 },
-            })
+            }
         }
         AnimationKind::SvgSmil | AnimationKind::SvgCss => {
-            Ok(FilePreviewDto::AnimatedSvg { svg_text: content })
+            FilePreviewDto::AnimatedSvg { svg_text: content }
         }
         AnimationKind::None => {
             let png = if is_vector_drawable {
@@ -103,15 +136,41 @@ pub fn render_file_preview(path: String, px: u32) -> Result<FilePreviewDto, View
             } else {
                 render_svg_preview(&bytes, px).map_err(ViewerErrorDto::from)?
             };
-            Ok(FilePreviewDto::Static { png })
+            FilePreviewDto::Static { png }
         }
-    }
+    };
+
+    Ok(PreviewResponse { name, preview })
 }
 
-/// Called by the frontend once on startup to retrieve the file path that
-/// launched this instance (from CLI args), then clears it so it's only
-/// consumed once.
+/// Show a native dialog and render the selected file without returning a path.
 #[tauri::command]
-pub fn take_pending_file(state: State<PendingFile>) -> Option<String> {
-    state.0.lock().unwrap().take()
+pub fn pick_file_preview(px: u32) -> Result<Option<PreviewResponse>, ViewerErrorDto> {
+    let Some(path) = rfd::FileDialog::new()
+        .add_filter("SVG / VectorDrawable", &["svg", "xml"])
+        .pick_file()
+    else {
+        return Ok(None);
+    };
+    preview_path(&path, px).map(Some)
+}
+
+/// Consume the command-line or single-instance file request and render it in
+/// Rust. The path remains inside the application state and never crosses IPC.
+#[tauri::command]
+pub fn take_pending_file_preview(
+    state: State<PendingFile>,
+    px: u32,
+) -> Result<Option<PreviewResponse>, ViewerErrorDto> {
+    let path = state
+        .0
+        .lock()
+        .map_err(|_| ViewerErrorDto {
+            message: "pending-file state is unavailable".into(),
+        })?
+        .take();
+    match path {
+        Some(path) => preview_path(Path::new(&path), px).map(Some),
+        None => Ok(None),
+    }
 }

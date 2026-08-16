@@ -4,8 +4,6 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { save } from "@tauri-apps/plugin-dialog";
-  import { writeFile } from "@tauri-apps/plugin-fs";
   import { get } from "svelte/store";
   import { settings } from "../lib/settings";
   import { onMount, onDestroy } from "svelte";
@@ -36,8 +34,7 @@
     const result = await invoke(command, bytes); // raw body — see commands.rs
     const outBytes = new Uint8Array(result);
     const defaultName = sourceName.replace(/\.zip$/i, outSuffix);
-    const path = await save({ defaultPath: defaultName, filters: [{ name: "ZIP", extensions: ["zip"] }] });
-    if (path) await writeFile(path, outBytes);
+    await invoke("save_output_file", { suggestedName: defaultName, bytes: Array.from(outBytes) });
     return outBytes;
   }
 
@@ -87,9 +84,10 @@
 
   async function exportSvgSingle() {
     if (!vdXml) return;
-    const path = await save({ defaultPath: sourceName.replace(/\.svg$/i, ".xml"), filters: [{ name: "VectorDrawable", extensions: ["xml"] }] });
-    if (!path) return;
-    await writeFile(path, new TextEncoder().encode(vdXml));
+    await invoke("save_output_file", {
+      suggestedName: sourceName.replace(/\.svg$/i, ".xml"),
+      bytes: Array.from(new TextEncoder().encode(vdXml)),
+    });
   }
 
   function resetFwd() {
@@ -143,9 +141,10 @@
 
   async function exportSvgFromVd() {
     if (!svgOut) return;
-    const path = await save({ defaultPath: rSourceName.replace(/\.xml$/i, ".svg"), filters: [{ name: "SVG", extensions: ["svg"] }] });
-    if (!path) return;
-    await writeFile(path, new TextEncoder().encode(svgOut));
+    await invoke("save_output_file", {
+      suggestedName: rSourceName.replace(/\.xml$/i, ".svg"),
+      bytes: Array.from(new TextEncoder().encode(svgOut)),
+    });
   }
 
   function resetRev() {

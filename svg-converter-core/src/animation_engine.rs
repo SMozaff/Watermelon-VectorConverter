@@ -23,7 +23,8 @@
 //! (reusing the existing emit+rasterize pipeline unchanged).
 
 use crate::error::ConversionError;
-use crate::models::{Fill, FillType, NormalizedSvg, Node as VdNode, VdGroup, VdPath};
+use crate::limits;
+use crate::models::{Fill, FillType, Node as VdNode, NormalizedSvg, VdGroup, VdPath};
 
 const ANDROID_NS: &str = "http://schemas.android.com/apk/res/android";
 const PX_MIN: u32 = 16;
@@ -64,6 +65,8 @@ pub fn render_avd_frames(
     max_frames: u32,
     px: u32,
 ) -> Result<AnimationFrames, ConversionError> {
+    limits::ensure_input_size(avd_bytes, "animated VectorDrawable input")?;
+    limits::ensure_render_area(px, px)?;
     if !(PX_MIN..=PX_MAX).contains(&px) {
         return Err(ConversionError::RenderError(format!(
             "px {px} out of range {PX_MIN}..={PX_MAX}"
@@ -74,14 +77,23 @@ pub fn render_avd_frames(
             "fps {fps} out of range {FPS_MIN}..={FPS_MAX}"
         )));
     }
-    let max_frames = if max_frames == 0 { DEFAULT_MAX_FRAMES } else { max_frames };
+    let max_frames = if max_frames == 0 {
+        DEFAULT_MAX_FRAMES
+    } else {
+        max_frames
+    };
+    if max_frames > limits::MAX_ANIMATION_FRAMES {
+        return Err(ConversionError::InputLimit(format!(
+            "requested frame count {max_frames} exceeds the {}-frame limit",
+            limits::MAX_ANIMATION_FRAMES
+        )));
+    }
 
     let doc = parse_avd_bundle(avd_bytes)?;
     let total_duration_ms = compute_timeline(&doc);
     let frame_times = sample_frame_times(total_duration_ms, fps, max_frames);
 
-    let natural_frame_count =
-        ((total_duration_ms as u64 * fps as u64) / 1000).max(1) as u32;
+    let natural_frame_count = ((total_duration_ms as u64 * fps as u64) / 1000).max(1) as u32;
     let loop_mode = if natural_frame_count > max_frames {
         LoopMode::Once
     } else {
@@ -90,7 +102,7 @@ pub fn render_avd_frames(
 
     let mut frames = Vec::with_capacity(frame_times.len());
     let mut frame_durations_ms = Vec::with_capacity(frame_times.len());
-    let frame_dur = if fps > 0 { (1000 / fps).max(1) } else { 1 };
+    let frame_dur = (1000 / fps).max(1);
 
     for &t in &frame_times {
         let evaluated = evaluate_frame(&doc, t);
@@ -232,9 +244,7 @@ impl Interpolator {
             Interpolator::Linear => t,
             Interpolator::Accelerate => t * t,
             Interpolator::Decelerate => 1.0 - (1.0 - t) * (1.0 - t),
-            Interpolator::AccelerateDecelerate => {
-                0.5 * (1.0 - (std::f32::consts::PI * t).cos())
-            }
+            Interpolator::AccelerateDecelerate => 0.5 * (1.0 - (std::f32::consts::PI * t).cos()),
         }
     }
 }
@@ -246,7 +256,7 @@ impl Interpolator {
 fn parse_avd_bundle(avd_bytes: &[u8]) -> Result<AvdDocument, ConversionError> {
     let text = std::str::from_utf8(avd_bytes)
         .map_err(|e| ConversionError::InvalidSvg(format!("not UTF-8: {e}")))?;
-    let doc = roxmltree::Document::parse(text)
+    let doc = roxmltree::Document::parse_with_options(text, limits::xml_options())
         .map_err(|e| ConversionError::InvalidSvg(e.to_string()))?;
     let root = doc.root_element();
     if root.tag_name().name() != "animated-vector" {
@@ -306,11 +316,21 @@ fn parse_avd_bundle(avd_bytes: &[u8]) -> Result<AvdDocument, ConversionError> {
         };
 
         if !animators.is_empty() {
-            targets.push(AnimationTarget { target_name, animators });
+            targets.push(AnimationTarget {
+                target_name,
+                animators,
+            });
         }
     }
 
-    Ok(AvdDocument { base, targets, viewport_w, viewport_h, width, height })
+    Ok(AvdDocument {
+        base,
+        targets,
+        viewport_w,
+        viewport_h,
+        width,
+        height,
+    })
 }
 
 /// Parse a `<set>` / `<objectAnimator>` tree into a flat list of
@@ -481,7 +501,8 @@ fn parse_avd_path(el: &roxmltree::Node) -> Result<AvdPath, ConversionError> {
 }
 
 fn android_attr<'a>(el: &'a roxmltree::Node, name: &str) -> Option<&'a str> {
-    el.attribute((ANDROID_NS, name)).or_else(|| el.attribute(name))
+    el.attribute((ANDROID_NS, name))
+        .or_else(|| el.attribute(name))
 }
 
 fn android_f32(el: &roxmltree::Node, name: &str) -> Option<f32> {
@@ -559,7 +580,11 @@ fn apply_target(node: &mut AvdNode, target: &AnimationTarget, time_ms: u32) {
 
 fn progress(animator: &PropertyAnimator, time_ms: u32) -> f32 {
     if animator.duration_ms == 0 {
-        return if time_ms >= animator.start_offset_ms { 1.0 } else { 0.0 };
+        return if time_ms >= animator.start_offset_ms {
+            1.0
+        } else {
+            0.0
+        };
     }
     let elapsed = time_ms as i64 - animator.start_offset_ms as i64;
     let raw = (elapsed as f32 / animator.duration_ms as f32).clamp(0.0, 1.0);
@@ -714,7 +739,10 @@ fn tokenize_path(d: &str) -> Option<Vec<PathCommand>> {
                 return None;
             }
             if let Some(letter) = current_letter {
-                commands.push(PathCommand { letter, args: std::mem::take(&mut current_args) });
+                commands.push(PathCommand {
+                    letter,
+                    args: std::mem::take(&mut current_args),
+                });
             }
             current_letter = Some(c);
             chars.next();
@@ -739,7 +767,10 @@ fn tokenize_path(d: &str) -> Option<Vec<PathCommand>> {
         return None;
     }
     if let Some(letter) = current_letter {
-        commands.push(PathCommand { letter, args: current_args });
+        commands.push(PathCommand {
+            letter,
+            args: current_args,
+        });
     }
 
     if commands.is_empty() {
@@ -807,7 +838,11 @@ fn to_vd_node(node: &AvdNode) -> VdNode {
             },
             stroke_color: p.stroke_color.clone(),
             stroke_width: p.stroke_width,
-            fill_type: if p.fill_type_evenodd { FillType::EvenOdd } else { FillType::NonZero },
+            fill_type: if p.fill_type_evenodd {
+                FillType::EvenOdd
+            } else {
+                FillType::NonZero
+            },
         }),
         AvdNode::Group(g) => VdNode::Group(VdGroup {
             translate_x: g.translate_x,
@@ -830,7 +865,9 @@ fn apply_alpha(color: &str, alpha: f32) -> String {
         Some(c) => c,
         None => return color.to_string(),
     };
-    let a = (argb[0] as f32 * alpha.clamp(0.0, 1.0)).round().clamp(0.0, 255.0) as u8;
+    let a = (argb[0] as f32 * alpha.clamp(0.0, 1.0))
+        .round()
+        .clamp(0.0, 255.0) as u8;
     format!("#{:02X}{:02X}{:02X}{:02X}", a, argb[1], argb[2], argb[3])
 }
 

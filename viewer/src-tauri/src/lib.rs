@@ -17,23 +17,21 @@ pub struct PendingFile(pub Mutex<Option<String>>);
 /// Extract the first plausible file path from CLI args (skip the binary name
 /// and any flags).
 fn extract_file_path(args: &[String]) -> Option<String> {
-    args.iter()
-        .skip(1)
-        .find(|a| !a.starts_with('-'))
-        .cloned()
+    args.iter().skip(1).find(|a| !a.starts_with('-')).cloned()
 }
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // A second launch happened — argv[1] is the new file path.
             // Push it to the existing window instead of opening a new one.
             if let Some(path) = extract_file_path(&argv) {
                 if let Some(state) = app.try_state::<PendingFile>() {
-                    *state.0.lock().unwrap() = Some(path.clone());
+                    if let Ok(mut pending) = state.0.lock() {
+                        *pending = Some(path);
+                    }
                 }
-                let _ = app.emit("viewer://open-file", path);
+                let _ = app.emit("viewer://file-ready", ());
             }
             // Bring the existing window to front.
             if let Some(w) = app.get_webview_window("main") {
@@ -45,8 +43,8 @@ pub fn run() {
             &std::env::args().collect::<Vec<_>>(),
         ))))
         .invoke_handler(tauri::generate_handler![
-            commands::render_file_preview,
-            commands::take_pending_file,
+            commands::pick_file_preview,
+            commands::take_pending_file_preview,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Watermelon Vector Viewer");

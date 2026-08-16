@@ -7,8 +7,13 @@ export default defineConfig({
   server: { port: 5174, strictPort: true },
   envPrefix: ["VITE_", "TAURI_"],
   build: {
-    target: ["es2021", "chrome100", "safari13"],
+    // Tauri ships with a modern WebView; avoid legacy downlevel transforms
+    // that are incompatible with current Svelte SSR output.
+    target: "esnext",
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_DEBUG,
+  },
+  ssr: {
+    target: "node",
   },
 });

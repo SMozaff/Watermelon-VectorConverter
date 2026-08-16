@@ -1,0 +1,13 @@
+# Rust compilation outputs
+/target/
+**/target/
+
+# JavaScript dependencies and generated frontend assets
+**/node_modules/
+**/.svelte-kit/
+**/dist/
+
+# Tauri-generated build artifacts and local sidecar binaries
+**/src-tauri/gen/
+**/src-tauri/binaries/*
+!**/src-tauri/binaries/.gitkeep
