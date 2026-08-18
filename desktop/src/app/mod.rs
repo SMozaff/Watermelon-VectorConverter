@@ -6,6 +6,18 @@ mod viewer;
 
 use std::path::PathBuf;
 
+// Baked into the binary so the window icon never depends on a runtime file
+// path (installers place the binary in different locations per OS/package).
+const ICON_PNG: &[u8] = include_bytes!("../../../icons/png/256.png");
+
+fn window_settings() -> iced::window::Settings {
+    let icon = iced::window::icon::from_file_data(ICON_PNG, None).ok();
+    iced::window::Settings {
+        icon,
+        ..iced::window::Settings::default()
+    }
+}
+
 pub fn run_converter() -> iced::Result {
     iced::application(
         converter::Converter::new,
@@ -15,6 +27,7 @@ pub fn run_converter() -> iced::Result {
     .title("Watermelon Vector Converter")
     .subscription(converter::Converter::subscription)
     .theme(|_: &_| iced::Theme::Dark)
+    .window(window_settings())
     .run()
 }
 
@@ -30,6 +43,7 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
     .title("Watermelon Vector Viewer")
     .subscription(viewer::Viewer::subscription)
     .theme(|_: &_| iced::Theme::Dark)
+    .window(window_settings())
     .run()
 }
 

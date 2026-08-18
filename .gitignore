@@ -2,12 +2,11 @@
 /target/
 **/target/
 
-# JavaScript dependencies and generated frontend assets
-**/node_modules/
-**/.svelte-kit/
+# Per-OS installer staging output (desktop.yml / release-all-platforms.yml)
 **/dist/
 
-# Tauri-generated build artifacts and local sidecar binaries
-**/src-tauri/gen/
-**/src-tauri/binaries/*
-!**/src-tauri/binaries/.gitkeep
+# Android build outputs and local config
+android/**/build/
+android/.gradle/
+android/local.properties
+**/jniLibs/**/*.so

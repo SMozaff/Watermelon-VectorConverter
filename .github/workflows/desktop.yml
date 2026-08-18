@@ -14,29 +14,18 @@ jobs:
         include:
           - os: windows-latest
             label: Windows
-            bundles: nsis,msi
             target: x86_64-pc-windows-msvc
-            viewer_ext: .exe
           - os: ubuntu-22.04
-            label: Linux
-            bundles: appimage,deb
+            label: Debian
             target: x86_64-unknown-linux-gnu
-            viewer_ext: ""
           - os: macos-latest
             label: macOS
-            bundles: dmg
             target: x86_64-apple-darwin
-            viewer_ext: ""
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -48,96 +37,92 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
             libgtk-3-dev \
+            libx11-dev \
+            libxkbcommon-dev \
+            libglib2.0-dev \
             pkg-config
 
-      - name: Install viewer frontend dependencies
-        working-directory: viewer
-        run: npm ci
-
-      - name: Build viewer frontend
-        working-directory: viewer
-        run: npm run build
-
-      - name: Build viewer binary
-        working-directory: viewer/src-tauri
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Stage viewer binary for externalBin
-        shell: bash
-        run: |
-          mkdir -p tauri/src-tauri/binaries
-          cp "target/${{ matrix.target }}/release/wvgc-viewer${{ matrix.viewer_ext }}" \
-             "tauri/src-tauri/binaries/wvgc-viewer-${{ matrix.target }}${{ matrix.viewer_ext }}"
-
-      - name: Install converter frontend dependencies
-        working-directory: tauri
-        run: npm ci
-
-      - name: Build converter (embeds viewer via externalBin)
-        working-directory: tauri
-        run: npm run tauri build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-        env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+      - name: Build wvgc-desktop and wvgc-cli (release)
+        run: cargo build --release --workspace --target ${{ matrix.target }}
 
       - name: Get version
         id: version
-        if: always()
         shell: bash
         run: |
-          VERSION=$(python3 -c "import json; print(json.load(open('tauri/src-tauri/tauri.conf.json'))['version'])")
+          VERSION=$(cargo pkgid -p wvgc-desktop | sed 's/.*[#@]//')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Rename bundle files
-        if: always()
+      # --- Windows: single MSI installer (wvgc-desktop.exe + wvgc-cli.exe) ---
+      - name: Install WiX Toolset
+        if: matrix.os == 'windows-latest'
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Install cargo-wix
+        if: matrix.os == 'windows-latest'
+        run: cargo install cargo-wix --locked
+
+      - name: Build MSI installer
+        if: matrix.os == 'windows-latest'
+        run: cargo wix -p wvgc-desktop --nocapture --target ${{ matrix.target }}
+
+      - name: Rename MSI
+        if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          PREFIX="Watermelon_vector_converter_v${{ steps.version.outputs.version }}_"
-          find target/${{ matrix.target }}/release/bundle -type f \( \
-            -name "*.exe" -o -name "*.msi" -o \
-            -name "*.AppImage" -o -name "*.deb" -o \
-            -name "*.dmg" \) 2>/dev/null | while read filepath; do
-            dir=$(dirname "$filepath")
-            base=$(basename "$filepath")
-            mv "$filepath" "$dir/${PREFIX}${base}"
-          done
+          mkdir -p dist
+          find target/wix -name "*.msi" -exec mv {} "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_x64.msi" \;
 
-      - name: List bundle outputs
-        if: always()
+      # --- Debian: single .deb (wvgc-desktop + wvgc-cli) ---
+      - name: Install cargo-deb
+        if: matrix.os == 'ubuntu-22.04'
+        run: cargo install cargo-deb --locked
+
+      - name: Build .deb package
+        if: matrix.os == 'ubuntu-22.04'
+        run: cargo deb -p wvgc-desktop --target ${{ matrix.target }} --no-build --no-strip
+
+      - name: Rename .deb
+        if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
-          find target -type f \( \
-            -name "*.exe" -o -name "*.msi" -o \
-            -name "*.AppImage" -o -name "*.deb" -o \
-            -name "*.dmg" \) -path "*/bundle/*" 2>/dev/null | sort || true
+          mkdir -p dist
+          find target/debian -name "*.deb" -exec mv {} "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_amd64.deb" \;
 
-      # Publishes whatever bundle(s) this OS produced as a downloadable
-      # workflow-run artifact, regardless of whether the run is clean enough
-      # to cut a tagged release. Kept alongside the per-OS release steps
-      # below — this does NOT replace them, both run. Matrix jobs upload
-      # under distinct artifact names so all three OSes are retrievable from
-      # the same run without overwriting each other.
-      - name: Upload bundle artifact (always, no release/tag)
+      # --- macOS: single .pkg installer (app bundle with both binaries) ---
+      - name: Build .app bundle and .pkg installer
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euo pipefail
+          APP="dist/Watermelon Vector Converter.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp "target/${{ matrix.target }}/release/wvgc-desktop" "$APP/Contents/MacOS/wvgc-desktop"
+          cp "target/${{ matrix.target }}/release/wvgc-cli" "$APP/Contents/MacOS/wvgc-cli"
+          cp icons/watermelon.icns "$APP/Contents/Resources/watermelon.icns"
+          sed "s/__VERSION__/${{ steps.version.outputs.version }}/g" desktop/macos/Info.plist > "$APP/Contents/Info.plist"
+          chmod +x "$APP/Contents/MacOS/wvgc-desktop" "$APP/Contents/MacOS/wvgc-cli"
+          pkgbuild \
+            --component "$APP" \
+            --install-location /Applications \
+            --identifier com.watermelon.vectorconverter \
+            --version "${{ steps.version.outputs.version }}" \
+            "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_macos.pkg"
+
+      - name: List installer outputs
+        if: always()
+        shell: bash
+        run: find dist -maxdepth 1 -type f 2>/dev/null | sort || true
+
+      - name: Upload installer artifact (always, no release/tag)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.label }}-v${{ steps.version.outputs.version }}-${{ github.run_number }}
-          path: |
-            target/${{ matrix.target }}/release/bundle/**/*.exe
-            target/${{ matrix.target }}/release/bundle/**/*.msi
-            target/${{ matrix.target }}/release/bundle/**/*.AppImage
-            target/${{ matrix.target }}/release/bundle/**/*.deb
-            target/${{ matrix.target }}/release/bundle/**/*.dmg
+          path: dist/*
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload release (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Upload release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-v${{ steps.version.outputs.version }}-${{ matrix.label }}
@@ -145,40 +130,11 @@ jobs:
           body: |
             ## Watermelon Vector Converter Desktop (${{ matrix.label }})
 
-            Single installer includes:
-            - Converter SVG VectorDrawable conversion
-            - Viewer registered as the default .svg handler; double-click any SVG to preview it instantly
+            One installer, everything included:
+            - Converter GUI
+            - File viewer (opens automatically when launched with a file path)
+            - wvgc-cli command-line tool
 
-            Both share the same Rust conversion core.
-          files: |
-            target/${{ matrix.target }}/release/bundle/nsis/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_*.exe
-            target/${{ matrix.target }}/release/bundle/msi/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_*.msi
-          fail_on_unmatched_files: true
-
-      - name: Upload release (Linux)
-        if: matrix.os == 'ubuntu-22.04'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop-v${{ steps.version.outputs.version }}-${{ matrix.label }}
-          name: "Watermelon Vector Converter ${{ steps.version.outputs.version }} Desktop (${{ matrix.label }})"
-          body: |
-            ## Watermelon Vector Converter Desktop (${{ matrix.label }})
-
-            Single package includes the converter and the bundled viewer binary.
-          files: |
-            target/${{ matrix.target }}/release/bundle/appimage/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_*.AppImage
-            target/${{ matrix.target }}/release/bundle/deb/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_*.deb
-          fail_on_unmatched_files: true
-
-      - name: Upload release (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop-v${{ steps.version.outputs.version }}-${{ matrix.label }}
-          name: "Watermelon Vector Converter ${{ steps.version.outputs.version }} Desktop (${{ matrix.label }})"
-          body: |
-            ## Watermelon Vector Converter Desktop (${{ matrix.label }})
-
-            Single package includes the converter and the bundled viewer binary.
-          files: target/${{ matrix.target }}/release/bundle/dmg/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_*.dmg
+            All three share the same Rust conversion core.
+          files: dist/*
           fail_on_unmatched_files: true
