@@ -36,15 +36,16 @@ and flexible export — entirely offline, with zero network calls.
 - **One shared core.** A single high-performance Rust engine (`svg-converter-core`) drives every platform, so conversion behaves identically everywhere.
 - **Smart batching.** Drop a single file for an instant conversion, drop several loose files or a ZIP for a batch job — each ZIP you select produces its own independent output.
 - **Dual preview.** See the original file and the generated result side by side (both rendered approximately via resvg).
-- **Multiplatform.** Native Android (Jetpack Compose) and a native iced desktop application for Windows and Linux. The desktop binary opens the converter by default and switches to a lightweight viewer when launched with an SVG or VectorDrawable file.
+- **Multiplatform.** Native Android (Jetpack Compose) and a native iced desktop application for Windows, macOS, and Debian Linux. The desktop binary opens the converter by default and switches to a lightweight viewer when launched with an SVG or VectorDrawable file. A `wvgc-cli` command-line tool covers scripting and batch use. All three (converter, viewer, CLI) ship in a single installer per OS.
 
 ## Platforms
 
 | Platform | UI | Status |
 |----------|----|--------|
 | Android (8.0+) | Jetpack Compose + Material 3 | Native |
-| Windows 10/11 | Native iced desktop binary | Desktop converter and phase-one viewer |
-| Linux | Native iced desktop binary | Desktop converter and phase-one viewer |
+| Windows 10/11 | Native iced desktop binary + CLI | Single MSI installer |
+| Debian Linux | Native iced desktop binary + CLI | Single .deb package |
+| macOS | Native iced desktop binary + CLI | Single .pkg installer |
 
 ## Architecture
 
@@ -58,14 +59,15 @@ pipeline in both directions.
 svg-converter-core (Rust)   ← SVG↔VectorDrawable parsing, conversion, rendering, batch
         │
         ├── JNI bridge       → Android (Kotlin + Jetpack Compose)
-        └── Native iced app  → Desktop converter and file viewer (Windows / Linux)
+        ├── Native iced app  → Desktop converter and file viewer (Windows / Debian Linux / macOS)
+        └── wvgc-cli         → Command-line conversion tool (same three OSes)
 ```
 
 The project follows an **Interface-First Execution Methodology**: interface
 contracts between the Rust core and each platform layer (JNI for Android,
-Tauri commands for desktop) are treated as the governing artifact — each
-platform is built against those contracts independently, and changes to a
-contract are made deliberately rather than incidentally.
+direct function calls for desktop and CLI) are treated as the governing
+artifact — each platform is built against those contracts independently, and
+changes to a contract are made deliberately rather than incidentally.
 
 ## Repository Layout
 
@@ -75,8 +77,8 @@ Watermelon-VectorConverter/
 │                         preview rendering, batch processing, analysis, FFI
 ├── android/              Android app (Compose UI, ViewModels, JNI bridge)
 ├── desktop/              Native iced desktop converter/viewer binary
-├── tauri/                Legacy Tauri desktop sources retained during migration
-├── viewer/               Legacy companion viewer sources retained during migration
+├── cli/                  wvgc-cli command-line conversion tool
+├── icons/                Master Watermelon icon (SVG) and generated .ico/.icns/PNGs
 └── .github/workflows/    CI pipeline
 ```
 

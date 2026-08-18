@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Watermelon Vector Converter
+Comment=Convert between SVG and Android VectorDrawable XML
+Exec=wvgc-desktop %f
+Icon=watermelon-vector-converter
+Terminal=false
+Categories=Graphics;2DGraphics;Utility;
+MimeType=image/svg+xml;

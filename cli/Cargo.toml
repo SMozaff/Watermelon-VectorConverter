@@ -1,0 +1,22 @@
+# Watermelon Vector Converter — CLI
+# Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
+#
+# Thin command-line front end over svg-converter-core, for scripting and
+# batch use without launching the GUI. Ships in the same installer as
+# wvgc-desktop on every desktop platform.
+
+[package]
+name = "wvgc-cli"
+version = "0.2.0"
+edition = "2021"
+authors = ["Suhail Muzaffari <so.muzaff@gmail.com>"]
+license = "LicenseRef-Proprietary"
+
+[[bin]]
+name = "wvgc-cli"
+path = "src/main.rs"
+
+[dependencies]
+svg-converter-core = { path = "../svg-converter-core" }
+clap = { version = "4", features = ["derive"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

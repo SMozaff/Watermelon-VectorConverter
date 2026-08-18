@@ -1,8 +1,8 @@
 // Reverse batch conversion tests (Contract C-4 batch). Copyright (c) 2026 Suhail Muzaffari.
 
-use svg_converter_core::batch_processor::{convert_vd_zip, ProgressEvent};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Write};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use svg_converter_core::batch_processor::{convert_vd_zip, ProgressEvent};
 
 fn make_zip(files: &[(&str, &str)]) -> Vec<u8> {
     let mut out = Vec::new();
@@ -20,7 +20,9 @@ fn make_zip(files: &[(&str, &str)]) -> Vec<u8> {
 
 fn names_in_zip(bytes: &[u8]) -> Vec<String> {
     let mut a = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
-    (0..a.len()).map(|i| a.by_index(i).unwrap().name().to_string()).collect()
+    (0..a.len())
+        .map(|i| a.by_index(i).unwrap().name().to_string())
+        .collect()
 }
 
 const VD: &str = r##"<vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -53,7 +55,10 @@ fn per_file_error_becomes_sidecar_not_fatal() {
 fn empty_zip_errors() {
     let zip = make_zip(&[("readme.txt", "no xmls here")]);
     let cancel = AtomicBool::new(false);
-    assert_eq!(convert_vd_zip(&zip, &|_e| {}, &cancel).unwrap_err().code(), 1003);
+    assert_eq!(
+        convert_vd_zip(&zip, &|_e| {}, &cancel).unwrap_err().code(),
+        1003
+    );
 }
 
 #[test]
@@ -74,12 +79,17 @@ fn progress_is_monotonic_and_complete() {
     let cancel = AtomicBool::new(false);
     let last = AtomicU32::new(0);
     let count = AtomicU32::new(0);
-    convert_vd_zip(&zip, &|e: ProgressEvent| {
-        let prev = last.swap(e.done, Ordering::Relaxed);
-        assert!(e.done >= prev, "progress went backwards");
-        assert_eq!(e.total, 3);
-        count.fetch_add(1, Ordering::Relaxed);
-    }, &cancel).unwrap();
+    convert_vd_zip(
+        &zip,
+        &|e: ProgressEvent| {
+            let prev = last.swap(e.done, Ordering::Relaxed);
+            assert!(e.done >= prev, "progress went backwards");
+            assert_eq!(e.total, 3);
+            count.fetch_add(1, Ordering::Relaxed);
+        },
+        &cancel,
+    )
+    .unwrap();
     assert_eq!(count.load(Ordering::Relaxed), 3, "one event per file");
     assert_eq!(last.load(Ordering::Relaxed), 3, "final done == total");
 }

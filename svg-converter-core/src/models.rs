@@ -40,9 +40,13 @@ pub struct VdGroup {
 impl Default for VdGroup {
     fn default() -> Self {
         VdGroup {
-            translate_x: 0.0, translate_y: 0.0,
-            scale_x: 1.0, scale_y: 1.0,
-            rotation: 0.0, pivot_x: 0.0, pivot_y: 0.0,
+            translate_x: 0.0,
+            translate_y: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+            pivot_x: 0.0,
+            pivot_y: 0.0,
             clip_path: None,
             children: Vec::new(),
         }
@@ -50,7 +54,10 @@ impl Default for VdGroup {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FillType { NonZero, EvenOdd }
+pub enum FillType {
+    NonZero,
+    EvenOdd,
+}
 
 /// A gradient color stop: offset 0..1 and #AARRGGBB color.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,15 +68,26 @@ pub struct GradientStop {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Gradient {
-    Linear { x1: f32, y1: f32, x2: f32, y2: f32, stops: Vec<GradientStop> },
-    Radial { cx: f32, cy: f32, r: f32, stops: Vec<GradientStop> },
+    Linear {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        stops: Vec<GradientStop>,
+    },
+    Radial {
+        cx: f32,
+        cy: f32,
+        r: f32,
+        stops: Vec<GradientStop>,
+    },
 }
 
 /// A fill is either a solid color, a gradient, or none.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Fill {
     None,
-    Solid(String),        // #AARRGGBB
+    Solid(String), // #AARRGGBB
     Gradient(Gradient),
 }
 

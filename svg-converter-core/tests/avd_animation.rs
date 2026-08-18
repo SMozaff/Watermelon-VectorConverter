@@ -182,7 +182,8 @@ fn fill_color_animation_renders_all_frames() {
 
 #[test]
 fn matching_structure_path_morph_renders_all_frames() {
-    let result = render_avd_frames(matching_structure_morph_avd(), 10, 90, 64).expect("should render");
+    let result =
+        render_avd_frames(matching_structure_morph_avd(), 10, 90, 64).expect("should render");
     assert_eq!(result.frames.len(), 10);
     for png in &result.frames {
         assert_eq!(&png[0..4], &[0x89, 0x50, 0x4E, 0x47]);
@@ -231,7 +232,10 @@ fn determinism_identical_inputs_produce_same_frame_count() {
     assert_eq!(a.frames.len(), b.frames.len());
     assert_eq!(a.frame_durations_ms, b.frame_durations_ms);
     for (fa, fb) in a.frames.iter().zip(b.frames.iter()) {
-        assert_eq!(fa, fb, "identical inputs should produce byte-identical PNG output");
+        assert_eq!(
+            fa, fb,
+            "identical inputs should produce byte-identical PNG output"
+        );
     }
 }
 

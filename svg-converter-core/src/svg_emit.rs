@@ -10,7 +10,10 @@ use crate::vd_models::*;
 pub fn emit(doc: &RevDoc) -> String {
     let mut defs = String::new();
     let mut body = String::new();
-    let mut ctx = EmitCtx { next_id: 0, defs: &mut defs };
+    let mut ctx = EmitCtx {
+        next_id: 0,
+        defs: &mut defs,
+    };
 
     for node in &doc.nodes {
         emit_node(node, 1, &mut body, &mut ctx);
@@ -18,10 +21,15 @@ pub fn emit(doc: &RevDoc) -> String {
 
     let mut s = String::new();
     s.push_str("<svg xmlns=\"http://www.w3.org/2000/svg\"\n");
-    s.push_str(&format!("    width=\"{}\" height=\"{}\"\n", fmt_num(doc.width), fmt_num(doc.height)));
+    s.push_str(&format!(
+        "    width=\"{}\" height=\"{}\"\n",
+        fmt_num(doc.width),
+        fmt_num(doc.height)
+    ));
     s.push_str(&format!(
         "    viewBox=\"0 0 {} {}\"",
-        fmt_num(doc.viewport_w), fmt_num(doc.viewport_h),
+        fmt_num(doc.viewport_w),
+        fmt_num(doc.viewport_h),
     ));
     if doc.alpha < 1.0 {
         s.push_str(&format!("\n    opacity=\"{}\"", fmt_num(doc.alpha)));
@@ -49,7 +57,9 @@ impl<'a> EmitCtx<'a> {
     }
 }
 
-fn indent(level: usize) -> String { "  ".repeat(level) }
+fn indent(level: usize) -> String {
+    "  ".repeat(level)
+}
 
 fn emit_node(node: &RevNode, level: usize, s: &mut String, ctx: &mut EmitCtx) {
     match node {
@@ -65,7 +75,8 @@ fn emit_group(g: &RevGroup, level: usize, s: &mut String, ctx: &mut EmitCtx) {
     let clip_attr = if let Some(cp) = &g.clip_path {
         let id = ctx.fresh_id("clip");
         ctx.defs.push_str(&format!(
-            "    <clipPath id=\"{id}\"><path d=\"{}\"/></clipPath>\n", cp,
+            "    <clipPath id=\"{id}\"><path d=\"{}\"/></clipPath>\n",
+            cp,
         ));
         Some(id)
     } else {
@@ -79,17 +90,30 @@ fn emit_group(g: &RevGroup, level: usize, s: &mut String, ctx: &mut EmitCtx) {
     if !g.is_identity_transform() {
         let mut parts = Vec::new();
         if g.translate_x != 0.0 || g.translate_y != 0.0 {
-            parts.push(format!("translate({},{})", fmt_num(g.translate_x), fmt_num(g.translate_y)));
+            parts.push(format!(
+                "translate({},{})",
+                fmt_num(g.translate_x),
+                fmt_num(g.translate_y)
+            ));
         }
         if g.rotation != 0.0 {
             if g.pivot_x != 0.0 || g.pivot_y != 0.0 {
-                parts.push(format!("rotate({},{},{})", fmt_num(g.rotation), fmt_num(g.pivot_x), fmt_num(g.pivot_y)));
+                parts.push(format!(
+                    "rotate({},{},{})",
+                    fmt_num(g.rotation),
+                    fmt_num(g.pivot_x),
+                    fmt_num(g.pivot_y)
+                ));
             } else {
                 parts.push(format!("rotate({})", fmt_num(g.rotation)));
             }
         }
         if g.scale_x != 1.0 || g.scale_y != 1.0 {
-            parts.push(format!("scale({},{})", fmt_num(g.scale_x), fmt_num(g.scale_y)));
+            parts.push(format!(
+                "scale({},{})",
+                fmt_num(g.scale_x),
+                fmt_num(g.scale_y)
+            ));
         }
         if !parts.is_empty() {
             s.push_str(&format!(" transform=\"{}\"", parts.join(" ")));
@@ -130,10 +154,19 @@ fn emit_path(p: &RevPath, level: usize, s: &mut String, ctx: &mut EmitCtx) {
 
 fn emit_gradient_def(g: &RevGradient, id: &str, defs: &mut String) {
     match g {
-        RevGradient::Linear { x1, y1, x2, y2, stops } => {
+        RevGradient::Linear {
+            x1,
+            y1,
+            x2,
+            y2,
+            stops,
+        } => {
             defs.push_str(&format!(
                 "    <linearGradient id=\"{id}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">\n",
-                fmt_num(*x1), fmt_num(*y1), fmt_num(*x2), fmt_num(*y2),
+                fmt_num(*x1),
+                fmt_num(*y1),
+                fmt_num(*x2),
+                fmt_num(*y2),
             ));
             emit_stops(stops, defs);
             defs.push_str("    </linearGradient>\n");
@@ -141,7 +174,9 @@ fn emit_gradient_def(g: &RevGradient, id: &str, defs: &mut String) {
         RevGradient::Radial { cx, cy, r, stops } => {
             defs.push_str(&format!(
                 "    <radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\">\n",
-                fmt_num(*cx), fmt_num(*cy), fmt_num(*r),
+                fmt_num(*cx),
+                fmt_num(*cy),
+                fmt_num(*r),
             ));
             emit_stops(stops, defs);
             defs.push_str("    </radialGradient>\n");
@@ -154,7 +189,9 @@ fn emit_stops(stops: &[RevGradientStop], defs: &mut String) {
         let (color, opacity) = split_alpha(&st.color);
         defs.push_str(&format!(
             "      <stop offset=\"{}\" stop-color=\"{}\" stop-opacity=\"{}\"/>\n",
-            fmt_num(st.offset), color, opacity,
+            fmt_num(st.offset),
+            color,
+            opacity,
         ));
     }
 }

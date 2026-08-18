@@ -25,39 +25,19 @@ jobs:
           - name: Windows x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            bundles: nsis,msi
-            artifact_glob: |
-              tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**/*.exe
-              tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**/*.msi
           - name: macOS Intel
             os: macos-13
             target: x86_64-apple-darwin
-            bundles: dmg
-            artifact_glob: tauri/src-tauri/target/x86_64-apple-darwin/release/bundle/**/*.dmg
           - name: macOS Apple Silicon
             os: macos-14
             target: aarch64-apple-darwin
-            bundles: dmg
-            artifact_glob: tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/**/*.dmg
-          - name: Linux x64
+          - name: Debian Linux x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            bundles: appimage,deb,rpm
-            artifact_glob: |
-              tauri/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/**/*.AppImage
-              tauri/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/**/*.deb
-              tauri/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/**/*.rpm
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: tauri/package-lock.json
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.97.1
@@ -69,106 +49,83 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf \
             libgtk-3-dev \
-            pkg-config \
-            rpm
+            libx11-dev \
+            libxkbcommon-dev \
+            libglib2.0-dev \
+            pkg-config
 
-      - name: Install locked frontend dependencies
-        working-directory: tauri
-        run: npm ci --ignore-scripts
+      - name: Build wvgc-desktop and wvgc-cli (release)
+        run: cargo build --release --workspace --target ${{ matrix.target }}
 
-      - name: Build signed desktop package
-        working-directory: tauri
-        run: npm run tauri -- build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(cargo pkgid -p wvgc-desktop | sed 's/.*[#@]//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # --- Windows: single MSI installer (wvgc-desktop.exe + wvgc-cli.exe) ---
+      - name: Install WiX Toolset
+        if: runner.os == 'Windows'
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Install cargo-wix
+        if: runner.os == 'Windows'
+        run: cargo install cargo-wix --locked
+
+      - name: Build MSI installer
+        if: runner.os == 'Windows'
+        run: cargo wix -p wvgc-desktop --nocapture --target ${{ matrix.target }}
         env:
-          TAURI_TARGET_TRIPLE: ${{ matrix.target }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          WATERMELON_ICON_ICO: ${{ github.workspace }}\icons\watermelon.ico
+
+      - name: Rename MSI
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          find target/wix -name "*.msi" -exec mv {} "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_x64.msi" \;
+
+      # --- Debian: single .deb (wvgc-desktop + wvgc-cli) ---
+      - name: Install cargo-deb
+        if: runner.os == 'Linux'
+        run: cargo install cargo-deb --locked
+
+      - name: Build .deb package
+        if: runner.os == 'Linux'
+        run: cargo deb -p wvgc-desktop --target ${{ matrix.target }} --no-build --no-strip
+
+      - name: Rename .deb
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p dist
+          find target/debian -name "*.deb" -exec mv {} "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_amd64.deb" \;
+
+      # --- macOS: single .pkg installer (app bundle with both binaries) ---
+      - name: Build .app bundle and .pkg installer
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          APP="dist/Watermelon Vector Converter.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp "target/${{ matrix.target }}/release/wvgc-desktop" "$APP/Contents/MacOS/wvgc-desktop"
+          cp "target/${{ matrix.target }}/release/wvgc-cli" "$APP/Contents/MacOS/wvgc-cli"
+          cp icons/watermelon.icns "$APP/Contents/Resources/watermelon.icns"
+          sed "s/__VERSION__/${{ steps.version.outputs.version }}/g" desktop/macos/Info.plist > "$APP/Contents/Info.plist"
+          chmod +x "$APP/Contents/MacOS/wvgc-desktop" "$APP/Contents/MacOS/wvgc-cli"
+          pkgbuild \
+            --component "$APP" \
+            --install-location /Applications \
+            --identifier com.watermelon.vectorconverter \
+            --version "${{ steps.version.outputs.version }}" \
+            "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_${{ matrix.target }}.pkg"
 
       - name: Upload ${{ matrix.name }} artifacts
         uses: actions/upload-artifact@v4
         with:
           name: watermelon-vector-converter-${{ matrix.target }}
-          path: ${{ matrix.artifact_glob }}
-          if-no-files-found: error
-          retention-days: 30
-
-  android-apk:
-    name: Android APK release package
-    runs-on: ubuntu-22.04
-    env:
-      ANDROID_API_LEVEL: "35"
-      ANDROID_BUILD_TOOLS: "35.0.0"
-      ANDROID_NDK_VERSION: "27.1.12297006"
-      ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: tauri/package-lock.json
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK and NDK packages
-        run: |
-          sdkmanager "platforms;android-${ANDROID_API_LEVEL}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "ndk;${ANDROID_NDK_VERSION}"
-          echo "NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
-
-      - name: Set up Rust Android targets
-        uses: dtolnay/rust-toolchain@1.97.1
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-
-      - name: Install locked frontend dependencies
-        working-directory: tauri
-        run: npm ci --ignore-scripts
-
-      - name: Initialize the Android project when absent
-        working-directory: tauri
-        run: |
-          if [ ! -d src-tauri/gen/android ]; then
-            npx tauri android init --ci --skip-targets-install
-          fi
-
-      - name: Configure Android release signing
-        if: env.ANDROID_KEY_BASE64 != ''
-        working-directory: tauri/src-tauri/gen/android
-        run: |
-          echo "$ANDROID_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/android-release.jks"
-          {
-            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"
-            echo "password=${{ secrets.ANDROID_KEY_PASSWORD }}"
-            echo "storeFile=$RUNNER_TEMP/android-release.jks"
-          } > keystore.properties
-
-      - name: Build universal and per-ABI APKs
-        working-directory: tauri
-        run: npm run tauri -- android build --apk --split-per-abi
-
-      - name: Upload Android APK artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: watermelon-vector-converter-android-apk
-          path: tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: dist/*
           if-no-files-found: error
           retention-days: 30
