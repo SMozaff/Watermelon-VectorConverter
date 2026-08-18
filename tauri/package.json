@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:sidecar": "node scripts/build-viewer-sidecar.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
