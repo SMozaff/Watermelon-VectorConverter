@@ -28,7 +28,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned to match rust-toolchain.toml exactly (not @stable): rustup
+        # resolves the toolchain to use by name, and rust-toolchain.toml's
+        # channel = "1.97.1" activates a toolchain named "1.97.1-<host>" —
+        # a different rustup toolchain identity than "stable-<host>". Cross
+        # targets added to "stable" here would not exist under "1.97.1",
+        # which is what cargo actually picks up, causing
+        # "error[E0463]: can't find crate for `std`" on any --target that
+        # isn't the runner's native host.
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
 
