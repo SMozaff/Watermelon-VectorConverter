@@ -1,9 +1,7 @@
 // Tier 3: gradient conversion tests. Copyright (c) 2026 Suhail Muzaffari.
 use svg_converter_core::convert_svg;
 
-fn conv(svg: &str) -> String {
-    convert_svg(svg.as_bytes()).expect("should convert")
-}
+fn conv(svg: &str) -> String { convert_svg(svg.as_bytes()).expect("should convert") }
 
 #[test]
 fn linear_gradient_emitted_as_aapt() {
@@ -18,23 +16,11 @@ fn linear_gradient_emitted_as_aapt() {
     </svg>"##;
     let out = conv(svg);
     assert!(out.contains("xmlns:aapt"), "root needs aapt ns: {out}");
-    assert!(
-        out.contains("<aapt:attr name=\"android:fillColor\">"),
-        "{out}"
-    );
+    assert!(out.contains("<aapt:attr name=\"android:fillColor\">"), "{out}");
     assert!(out.contains("android:type=\"linear\""), "{out}");
-    assert!(
-        out.contains("android:color=\"#FFFF0000\""),
-        "first stop: {out}"
-    );
-    assert!(
-        out.contains("android:color=\"#FF0000FF\""),
-        "last stop: {out}"
-    );
-    assert!(
-        out.contains("</path>"),
-        "gradient path is not self-closing: {out}"
-    );
+    assert!(out.contains("android:color=\"#FFFF0000\""), "first stop: {out}");
+    assert!(out.contains("android:color=\"#FF0000FF\""), "last stop: {out}");
+    assert!(out.contains("</path>"), "gradient path is not self-closing: {out}");
 }
 
 #[test]
@@ -89,8 +75,5 @@ fn dangling_gradient_ref_does_not_crash() {
     let svg = r##"<svg viewBox="0 0 10 10"><path d="M0 0 L10 10" fill="url(#missing)"/></svg>"##;
     let out = conv(svg);
     assert!(out.contains("<path"));
-    assert!(
-        !out.contains("aapt:attr"),
-        "no gradient should be emitted: {out}"
-    );
+    assert!(!out.contains("aapt:attr"), "no gradient should be emitted: {out}");
 }

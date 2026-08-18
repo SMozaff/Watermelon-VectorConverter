@@ -7,14 +7,12 @@
 //! Both are explicitly approximate: resvg is not Android's Skia pipeline.
 
 use crate::error::ConversionError;
-use crate::limits;
 
 const PX_MIN: u32 = 16;
 const PX_MAX: u32 = 2048;
 
 /// C-2: render original SVG bytes to a square px*px PNG (sRGB, transparent bg).
 pub fn render_svg_preview(svg_bytes: &[u8], px: u32) -> Result<Vec<u8>, ConversionError> {
-    limits::ensure_input_size(svg_bytes, "SVG preview input")?;
     check_px(px)?;
     let svg = std::str::from_utf8(svg_bytes)
         .map_err(|e| ConversionError::RenderError(format!("not UTF-8: {e}")))?;
@@ -24,14 +22,12 @@ pub fn render_svg_preview(svg_bytes: &[u8], px: u32) -> Result<Vec<u8>, Conversi
 /// C-2: render the GENERATED VectorDrawable by reconstructing an SVG from its
 /// pathData and rendering THAT (keeps the preview honest about emitted XML).
 pub fn render_vd_preview(vd_xml: &str, px: u32) -> Result<Vec<u8>, ConversionError> {
-    limits::ensure_input_size(vd_xml.as_bytes(), "VectorDrawable preview input")?;
     check_px(px)?;
     let svg = vd_to_svg(vd_xml)?;
     render_svg_string(&svg, px)
 }
 
 fn check_px(px: u32) -> Result<(), ConversionError> {
-    limits::ensure_render_area(px, px)?;
     if !(PX_MIN..=PX_MAX).contains(&px) {
         return Err(ConversionError::RenderError(format!(
             "px {px} out of range {PX_MIN}..={PX_MAX}"
@@ -52,8 +48,8 @@ fn render_svg_string(svg: &str, px: u32) -> Result<Vec<u8>, ConversionError> {
     };
 
     let opt = usvg::Options::default();
-    let tree =
-        usvg::Tree::from_str(svg, &opt).map_err(|e| ConversionError::RenderError(e.to_string()))?;
+    let tree = usvg::Tree::from_str(svg, &opt)
+        .map_err(|e| ConversionError::RenderError(e.to_string()))?;
 
     let mut pixmap = tiny_skia::Pixmap::new(px, px)
         .ok_or_else(|| ConversionError::RenderError("pixmap alloc failed".into()))?;

@@ -16,7 +16,7 @@ jobs:
             label: Windows
             target: x86_64-pc-windows-msvc
           - os: ubuntu-22.04
-            label: Debian
+            label: Linux
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
             label: macOS
@@ -28,111 +28,123 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Rust
-        # Pinned to match rust-toolchain.toml exactly (not @stable): rustup
-        # resolves the toolchain to use by name, and rust-toolchain.toml's
-        # channel = "1.97.1" activates a toolchain named "1.97.1-<host>" —
-        # a different rustup toolchain identity than "stable-<host>". Cross
-        # targets added to "stable" here would not exist under "1.97.1",
-        # which is what cargo actually picks up, causing
-        # "error[E0463]: can't find crate for `std`" on any --target that
-        # isn't the runner's native host.
-        uses: dtolnay/rust-toolchain@1.97.1
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
+      # iced's default renderer needs a graphics backend; on Linux CI
+      # runners (no GPU) this also needs the usual X11/Wayland dev headers
+      # for windowing, plus rfd's file-dialog backend dependencies.
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgtk-3-dev \
-            libx11-dev \
             libxkbcommon-dev \
-            libglib2.0-dev \
+            libwayland-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            libgtk-3-dev \
+            libdbus-1-dev \
             pkg-config
-
-      - name: Build wvgc-desktop and wvgc-cli (release)
-        run: cargo build --release --workspace --target ${{ matrix.target }}
 
       - name: Get version
         id: version
         shell: bash
         run: |
-          VERSION=$(cargo pkgid -p wvgc-desktop | sed 's/.*[#@]//')
+          VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('desktop/Cargo.toml','rb'))['package']['version'])")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      # --- Windows: single MSI installer (wvgc-desktop.exe + wvgc-cli.exe) ---
-      - name: Install WiX Toolset
-        if: matrix.os == 'windows-latest'
-        run: choco install wixtoolset -y --no-progress
+      - name: Build release binary
+        working-directory: desktop
+        run: cargo build --release --target ${{ matrix.target }}
 
+      # ── Windows: real .msi via cargo-wix (WiX Toolset) ──────────────────
       - name: Install cargo-wix
         if: matrix.os == 'windows-latest'
         run: cargo install cargo-wix --locked
 
+      - name: Generate WiX installer source (first run only)
+        if: matrix.os == 'windows-latest'
+        working-directory: desktop
+        shell: bash
+        run: |
+          if [ ! -f wix/main.wxs ]; then
+            cargo wix init
+          fi
+
       - name: Build MSI installer
         if: matrix.os == 'windows-latest'
-        run: cargo wix -p wvgc-desktop --nocapture --target ${{ matrix.target }}
-        env:
-          WATERMELON_ICON_ICO: ${{ github.workspace }}\icons\watermelon.ico
+        working-directory: desktop
+        run: cargo wix --target ${{ matrix.target }} --nocapture
 
       - name: Rename MSI
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          mkdir -p dist
-          find target/wix -name "*.msi" -exec mv {} "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_x64.msi" \;
+          find desktop/target/wix -name "*.msi" | while read f; do
+            mv "$f" "desktop/target/wix/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_$(basename "$f")"
+          done
 
-      # --- Debian: single .deb (wvgc-desktop + wvgc-cli) ---
+      - name: Upload Windows artifact (always, no release/tag)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-Windows-v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          path: desktop/target/wix/*.msi
+          if-no-files-found: warn
+          retention-days: 14
+
+      # ── Linux: real .deb via cargo-deb ──────────────────────────────────
       - name: Install cargo-deb
         if: matrix.os == 'ubuntu-22.04'
         run: cargo install cargo-deb --locked
 
       - name: Build .deb package
         if: matrix.os == 'ubuntu-22.04'
-        run: cargo deb -p wvgc-desktop --target ${{ matrix.target }} --no-build --no-strip
+        working-directory: desktop
+        run: cargo deb --target ${{ matrix.target }} --no-build
 
       - name: Rename .deb
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
-          mkdir -p dist
-          find target/debian -name "*.deb" -exec mv {} "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_amd64.deb" \;
+          find desktop/target/debian -name "*.deb" | while read f; do
+            mv "$f" "desktop/target/debian/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_$(basename "$f")"
+          done
 
-      # --- macOS: single .pkg installer (app bundle with both binaries) ---
-      - name: Build .app bundle and .pkg installer
-        if: matrix.os == 'macos-latest'
-        run: |
-          set -euo pipefail
-          APP="dist/Watermelon Vector Converter.app"
-          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp "target/${{ matrix.target }}/release/wvgc-desktop" "$APP/Contents/MacOS/wvgc-desktop"
-          cp "target/${{ matrix.target }}/release/wvgc-cli" "$APP/Contents/MacOS/wvgc-cli"
-          cp icons/watermelon.icns "$APP/Contents/Resources/watermelon.icns"
-          sed "s/__VERSION__/${{ steps.version.outputs.version }}/g" desktop/macos/Info.plist > "$APP/Contents/Info.plist"
-          chmod +x "$APP/Contents/MacOS/wvgc-desktop" "$APP/Contents/MacOS/wvgc-cli"
-          pkgbuild \
-            --component "$APP" \
-            --install-location /Applications \
-            --identifier com.watermelon.vectorconverter \
-            --version "${{ steps.version.outputs.version }}" \
-            "dist/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_macos.pkg"
-
-      - name: List installer outputs
-        if: always()
-        shell: bash
-        run: find dist -maxdepth 1 -type f 2>/dev/null | sort || true
-
-      - name: Upload installer artifact (always, no release/tag)
-        if: always()
+      - name: Upload Linux artifact (always, no release/tag)
+        if: matrix.os == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.label }}-v${{ steps.version.outputs.version }}-${{ github.run_number }}
-          path: dist/*
+          name: desktop-Linux-v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          path: desktop/target/debian/*.deb
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload release
+      # ── macOS: plain binary for now (no installer tooling configured yet) ─
+      - name: Package macOS binary
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          mkdir -p desktop/target/package
+          cp desktop/target/${{ matrix.target }}/release/wvgc-desktop \
+             "desktop/target/package/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_macos"
+          chmod +x "desktop/target/package/Watermelon_vector_converter_v${{ steps.version.outputs.version }}_macos"
+
+      - name: Upload macOS artifact (always, no release/tag)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macOS-v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          path: desktop/target/package/*
+          if-no-files-found: warn
+          retention-days: 14
+
+      # ── Tagged releases, per-OS (unchanged trigger/behavior from before) ─
+      - name: Upload release (Windows)
+        if: matrix.os == 'windows-latest'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-v${{ steps.version.outputs.version }}-${{ matrix.label }}
@@ -140,11 +152,37 @@ jobs:
           body: |
             ## Watermelon Vector Converter Desktop (${{ matrix.label }})
 
-            One installer, everything included:
-            - Converter GUI
-            - File viewer (opens automatically when launched with a file path)
-            - wvgc-cli command-line tool
+            Native build — no WebView2/Tauri dependency. Includes both the
+            converter and the viewer (opened automatically via file
+            association for .svg/.xml, or launch normally for the full
+            converter).
+          files: desktop/target/wix/*.msi
+          fail_on_unmatched_files: true
 
-            All three share the same Rust conversion core.
-          files: dist/*
+      - name: Upload release (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ steps.version.outputs.version }}-${{ matrix.label }}
+          name: "Watermelon Vector Converter ${{ steps.version.outputs.version }} Desktop (${{ matrix.label }})"
+          body: |
+            ## Watermelon Vector Converter Desktop (${{ matrix.label }})
+
+            Native build — no WebKitGTK dependency. Includes both the
+            converter and the viewer.
+          files: desktop/target/debian/*.deb
+          fail_on_unmatched_files: true
+
+      - name: Upload release (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ steps.version.outputs.version }}-${{ matrix.label }}
+          name: "Watermelon Vector Converter ${{ steps.version.outputs.version }} Desktop (${{ matrix.label }})"
+          body: |
+            ## Watermelon Vector Converter Desktop (${{ matrix.label }})
+
+            Native build. No installer yet for macOS — plain executable;
+            run `chmod +x` if needed, then launch directly.
+          files: desktop/target/package/*
           fail_on_unmatched_files: true

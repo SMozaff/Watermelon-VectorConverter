@@ -15,11 +15,11 @@
 //! This module is compiled only for Android targets.
 #![cfg(target_os = "android")]
 
-use crate::batch_processor::{convert_vd_zip, convert_zip, ProgressEvent};
-use crate::convert_svg;
-use crate::convert_vd;
+use crate::batch_processor::{convert_zip, convert_vd_zip, ProgressEvent};
 use crate::error::ConversionError;
 use crate::image_export::{render_svg_preview, render_vd_preview};
+use crate::convert_svg;
+use crate::convert_vd;
 
 use jni::objects::{JByteArray, JClass, JObject, JString, JThrowable, JValue};
 use jni::sys::{jbyteArray, jint, jobject, jstring};
@@ -44,18 +44,14 @@ impl SendSyncEnvPtr {
     // below capture this whole wrapper, not just the raw-pointer field —
     // otherwise Rust 2021's disjoint closure capture would capture the
     // field's bare pointer type directly, which isn't Send/Sync.
-    fn get(&self) -> *mut jni::sys::JNIEnv {
-        self.0
-    }
+    fn get(&self) -> *mut jni::sys::JNIEnv { self.0 }
 }
 
 struct SendSyncObjPtr(jobject);
 unsafe impl Send for SendSyncObjPtr {}
 unsafe impl Sync for SendSyncObjPtr {}
 impl SendSyncObjPtr {
-    fn get(&self) -> jobject {
-        self.0
-    }
+    fn get(&self) -> jobject { self.0 }
 }
 
 /// Throw com.watermelon.converter.jni.ConversionException(code, message).
@@ -69,10 +65,7 @@ fn throw_conversion(env: &mut JNIEnv, err: &ConversionError) {
             .new_object(
                 cls,
                 "(ILjava/lang/String;)V",
-                &[
-                    JValue::Int(err.code() as jint),
-                    JValue::Object(&JObject::from(m)),
-                ],
+                &[JValue::Int(err.code() as jint), JValue::Object(&JObject::from(m))],
             )
             .ok(),
         _ => None,
@@ -99,23 +92,14 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     let bytes = match bytes_from(&mut env, &svg) {
         Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
+        Err(e) => { throw_conversion(&mut env, &e); return null; }
     };
     match convert_svg(&bytes) {
         Ok(xml) => match env.new_string(xml) {
             Ok(s) => s.into_raw(),
-            Err(e) => {
-                throw_conversion(&mut env, &ConversionError::Internal(e.to_string()));
-                null
-            }
+            Err(e) => { throw_conversion(&mut env, &ConversionError::Internal(e.to_string())); null }
         },
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -130,59 +114,34 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     let bytes = match bytes_from(&mut env, &vd_xml) {
         Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
+        Err(e) => { throw_conversion(&mut env, &e); return null; }
     };
     match convert_vd(&bytes) {
         Ok(svg) => match env.new_string(svg) {
             Ok(s) => s.into_raw(),
-            Err(e) => {
-                throw_conversion(&mut env, &ConversionError::Internal(e.to_string()));
-                null
-            }
+            Err(e) => { throw_conversion(&mut env, &ConversionError::Internal(e.to_string())); null }
         },
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 #[no_mangle]
-pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeRenderSvgPreview<
-    'a,
->(
+pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeRenderSvgPreview<'a>(
     mut env: JNIEnv<'a>,
     _cls: JClass<'a>,
     svg: JByteArray<'a>,
     px: jint,
 ) -> jbyteArray {
     let null = JObject::null().into_raw();
-    let bytes = match bytes_from(&mut env, &svg) {
-        Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
-    };
+    let bytes = match bytes_from(&mut env, &svg) { Ok(b) => b, Err(e) => { throw_conversion(&mut env, &e); return null; } };
     match render_svg_preview(&bytes, px.max(0) as u32) {
-        Ok(png) => env
-            .byte_array_from_slice(&png)
-            .map(|a| a.into_raw())
-            .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Ok(png) => env.byte_array_from_slice(&png).map(|a| a.into_raw()).unwrap_or(null),
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
 /// nativeRenderVdPreview(vdXml: String, px: Int): ByteArray   [Contract C-3]
 #[no_mangle]
-pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeRenderVdPreview<
-    'a,
->(
+pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeRenderVdPreview<'a>(
     mut env: JNIEnv<'a>,
     _cls: JClass<'a>,
     vd_xml: JString<'a>,
@@ -191,20 +150,11 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     let xml: String = match env.get_string(&vd_xml) {
         Ok(s) => s.into(),
-        Err(e) => {
-            throw_conversion(&mut env, &ConversionError::Internal(e.to_string()));
-            return null;
-        }
+        Err(e) => { throw_conversion(&mut env, &ConversionError::Internal(e.to_string())); return null; }
     };
     match render_vd_preview(&xml, px.max(0) as u32) {
-        Ok(png) => env
-            .byte_array_from_slice(&png)
-            .map(|a| a.into_raw())
-            .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Ok(png) => env.byte_array_from_slice(&png).map(|a| a.into_raw()).unwrap_or(null),
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -223,13 +173,7 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     CANCEL.store(false, Ordering::SeqCst);
 
-    let bytes = match bytes_from(&mut env, &zip) {
-        Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
-    };
+    let bytes = match bytes_from(&mut env, &zip) { Ok(b) => b, Err(e) => { throw_conversion(&mut env, &e); return null; } };
 
     // Wrap the raw handles so the closure can satisfy Send + Sync. cb.as_raw()
     // returns the real underlying jobject handle (documented API), not the
@@ -257,14 +201,8 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     };
 
     match convert_zip(&bytes, &sink, &CANCEL) {
-        Ok(out) => env
-            .byte_array_from_slice(&out)
-            .map(|a| a.into_raw())
-            .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Ok(out) => env.byte_array_from_slice(&out).map(|a| a.into_raw()).unwrap_or(null),
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -273,9 +211,7 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
 /// marshalling exactly; kept separate so the existing C-2/C-3 contract for
 /// nativeConvertZip is never touched.
 #[no_mangle]
-pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeConvertVdZip<
-    'a,
->(
+pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nativeConvertVdZip<'a>(
     mut env: JNIEnv<'a>,
     _cls: JClass<'a>,
     zip: JByteArray<'a>,
@@ -284,13 +220,7 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     CANCEL.store(false, Ordering::SeqCst);
 
-    let bytes = match bytes_from(&mut env, &zip) {
-        Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
-    };
+    let bytes = match bytes_from(&mut env, &zip) { Ok(b) => b, Err(e) => { throw_conversion(&mut env, &e); return null; } };
 
     let env_ptr = SendSyncEnvPtr(env.get_raw());
     let cb_raw = SendSyncObjPtr(cb.as_raw());
@@ -315,14 +245,8 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     };
 
     match convert_vd_zip(&bytes, &sink, &CANCEL) {
-        Ok(out) => env
-            .byte_array_from_slice(&out)
-            .map(|a| a.into_raw())
-            .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Ok(out) => env.byte_array_from_slice(&out).map(|a| a.into_raw()).unwrap_or(null),
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -338,17 +262,10 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
 fn analysis_json(a: &crate::analysis::VectorAnalysis) -> String {
     format!(
         r#"{{"width":{w},"height":{h},"viewportW":{vw},"viewportH":{vh},"pathCount":{pc},"groupCount":{gc},"usesPaths":{up},"usesGradients":{ug},"usesSolidColors":{us},"usesStrokes":{ust},"singleColorTintable":{sct},"tintColor":{tc},"isAnimated":{ia}}}"#,
-        w = a.width,
-        h = a.height,
-        vw = a.viewport_w,
-        vh = a.viewport_h,
-        pc = a.path_count,
-        gc = a.group_count,
-        up = a.uses_paths,
-        ug = a.uses_gradients,
-        us = a.uses_solid_colors,
-        ust = a.uses_strokes,
-        sct = a.single_color_tintable,
+        w = a.width, h = a.height, vw = a.viewport_w, vh = a.viewport_h,
+        pc = a.path_count, gc = a.group_count,
+        up = a.uses_paths, ug = a.uses_gradients, us = a.uses_solid_colors,
+        ust = a.uses_strokes, sct = a.single_color_tintable,
         tc = match &a.tint_color {
             Some(c) => format!("\"{}\"", c),
             None => "null".to_string(),
@@ -371,20 +288,11 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     let data = match bytes_from(&mut env, &bytes) {
         Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
+        Err(e) => { throw_conversion(&mut env, &e); return null; }
     };
     match crate::analyze_vector(&data) {
-        Ok(a) => env
-            .new_string(&analysis_json(&a))
-            .map(|s| s.into_raw())
-            .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Ok(a) => env.new_string(&analysis_json(&a)).map(|s| s.into_raw()).unwrap_or(null),
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -401,20 +309,11 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     let data = match bytes_from(&mut env, &bytes) {
         Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
+        Err(e) => { throw_conversion(&mut env, &e); return null; }
     };
     match crate::analyze_vd_vector(&data) {
-        Ok(a) => env
-            .new_string(&analysis_json(&a))
-            .map(|s| s.into_raw())
-            .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Ok(a) => env.new_string(&analysis_json(&a)).map(|s| s.into_raw()).unwrap_or(null),
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -484,25 +383,14 @@ pub extern "system" fn Java_com_watermelon_converter_jni_SvgConverterNative_nati
     let null = JObject::null().into_raw();
     let bytes = match bytes_from(&mut env, &avd_bytes) {
         Ok(b) => b,
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            return null;
-        }
+        Err(e) => { throw_conversion(&mut env, &e); return null; }
     };
-    match crate::render_avd_frames(
-        &bytes,
-        fps.max(0) as u32,
-        max_frames.max(0) as u32,
-        px.max(0) as u32,
-    ) {
+    match crate::render_avd_frames(&bytes, fps.max(0) as u32, max_frames.max(0) as u32, px.max(0) as u32) {
         Ok(frames) => env
             .new_string(&avd_frames_json(&frames))
             .map(|s| s.into_raw())
             .unwrap_or(null),
-        Err(e) => {
-            throw_conversion(&mut env, &e);
-            null
-        }
+        Err(e) => { throw_conversion(&mut env, &e); null }
     }
 }
 
@@ -517,16 +405,8 @@ fn base64_encode(data: &[u8]) -> String {
         let b2 = *chunk.get(2).unwrap_or(&0);
         out.push(TABLE[(b0 >> 2) as usize] as char);
         out.push(TABLE[(((b0 & 0x03) << 4) | (b1 >> 4)) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            TABLE[(((b1 & 0x0f) << 2) | (b2 >> 6)) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TABLE[(b2 & 0x3f) as usize] as char
-        } else {
-            '='
-        });
+        out.push(if chunk.len() > 1 { TABLE[(((b1 & 0x0f) << 2) | (b2 >> 6)) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { TABLE[(b2 & 0x3f) as usize] as char } else { '=' });
     }
     out
 }
@@ -551,10 +431,6 @@ fn avd_frames_json(f: &crate::animation_engine::AnimationFrames) -> String {
         .join(",");
     format!(
         r#"{{"width":{w},"height":{h},"loopMode":"{lm}","frameDurationsMs":[{d}],"framesBase64":[{fr}]}}"#,
-        w = f.width,
-        h = f.height,
-        lm = loop_mode,
-        d = durations,
-        fr = frames_b64,
+        w = f.width, h = f.height, lm = loop_mode, d = durations, fr = frames_b64,
     )
 }

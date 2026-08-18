@@ -7,16 +7,14 @@
 //! (including <aapt:attr> nested gradients), and strokes.
 
 use crate::error::ConversionError;
-use crate::limits;
 use crate::vd_models::*;
 
 const ANDROID_NS: &str = "http://schemas.android.com/apk/res/android";
 
 pub fn parse(vd_xml: &[u8]) -> Result<RevDoc, ConversionError> {
-    limits::ensure_input_size(vd_xml, "VectorDrawable XML input")?;
     let text = std::str::from_utf8(vd_xml)
         .map_err(|e| ConversionError::InvalidSvg(format!("not UTF-8: {e}")))?;
-    let doc = roxmltree::Document::parse_with_options(text, limits::xml_options())
+    let doc = roxmltree::Document::parse(text)
         .map_err(|e| ConversionError::InvalidSvg(e.to_string()))?;
     let root = doc.root_element();
     if root.tag_name().name() != "vector" {
@@ -36,14 +34,7 @@ pub fn parse(vd_xml: &[u8]) -> Result<RevDoc, ConversionError> {
         }
     }
 
-    Ok(RevDoc {
-        viewport_w: vw,
-        viewport_h: vh,
-        width,
-        height,
-        alpha,
-        nodes,
-    })
+    Ok(RevDoc { viewport_w: vw, viewport_h: vh, width, height, alpha, nodes })
 }
 
 fn parse_node(el: &roxmltree::Node) -> Result<Option<RevNode>, ConversionError> {
@@ -99,30 +90,18 @@ fn parse_path(el: &roxmltree::Node) -> Result<RevPath, ConversionError> {
         Some(c) => RevFill::Solid(c.to_string()),
         None => RevFill::None,
     };
-    for child in el
-        .children()
-        .filter(|n| n.is_element() && n.tag_name().name() == "attr")
-    {
-        if child.attribute("name") != Some("android:fillColor") {
-            continue;
-        }
+    for child in el.children().filter(|n| n.is_element() && n.tag_name().name() == "attr") {
+        if child.attribute("name") != Some("android:fillColor") { continue; }
         if let Some(grad_el) = child.children().find(|n| n.has_tag_name("gradient")) {
             fill = RevFill::Gradient(parse_gradient(&grad_el)?);
         }
     }
 
-    Ok(RevPath {
-        path_data,
-        fill,
-        stroke_color,
-        stroke_width,
-        fill_type_evenodd,
-    })
+    Ok(RevPath { path_data, fill, stroke_color, stroke_width, fill_type_evenodd })
 }
 
 fn parse_gradient(el: &roxmltree::Node) -> Result<RevGradient, ConversionError> {
-    let stops: Vec<RevGradientStop> = el
-        .children()
+    let stops: Vec<RevGradientStop> = el.children()
         .filter(|n| n.has_tag_name("item"))
         .filter_map(|item| {
             let offset = android_f32(&item, "offset")?;
@@ -154,8 +133,7 @@ fn parse_gradient(el: &roxmltree::Node) -> Result<RevGradient, ConversionError> 
 /// attribute — some hand-authored or third-party VD files omit the prefix
 /// binding while still meaning the android: attribute.
 fn android_attr<'a>(el: &'a roxmltree::Node, name: &str) -> Option<&'a str> {
-    el.attribute((ANDROID_NS, name))
-        .or_else(|| el.attribute(name))
+    el.attribute((ANDROID_NS, name)).or_else(|| el.attribute(name))
 }
 
 fn android_f32(el: &roxmltree::Node, name: &str) -> Option<f32> {

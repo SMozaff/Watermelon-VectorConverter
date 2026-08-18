@@ -1,7 +1,7 @@
 // Watermelon Vector Converter — Module R contract tests (C-1).
 // Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
 
-use svg_converter_core::convert_svg;
+use svg_converter_core::{convert_svg, ConversionError};
 
 #[test]
 fn basic_triangle_matches_contract_vector() {
@@ -51,10 +51,7 @@ fn relative_commands_convert_to_absolute() {
 fn hex_short_form_expands() {
     let svg = br##"<svg viewBox="0 0 1 1"><path d="M0 0 L1 1" fill="#0f0"/></svg>"##;
     let out = convert_svg(svg).unwrap();
-    assert!(
-        out.contains("android:fillColor=\"#FF00FF00\""),
-        "got: {out}"
-    );
+    assert!(out.contains("android:fillColor=\"#FF00FF00\""), "got: {out}");
 }
 
 #[test]
@@ -106,8 +103,5 @@ fn opacity_folds_into_alpha() {
     let svg = br##"<svg viewBox="0 0 1 1"><path d="M0 0 L1 1" fill="#ff0000" fill-opacity="0.5"/></svg>"##;
     let out = convert_svg(svg).unwrap();
     // 0.5 * 255 = 127.5 -> 128 -> 0x80
-    assert!(
-        out.contains("android:fillColor=\"#80FF0000\""),
-        "got: {out}"
-    );
+    assert!(out.contains("android:fillColor=\"#80FF0000\""), "got: {out}");
 }

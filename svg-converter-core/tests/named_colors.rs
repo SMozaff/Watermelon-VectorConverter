@@ -28,8 +28,9 @@ fn common_named_colors_beyond_the_original_seven_are_recognized() {
         ("chocolate", "D2691E"),
     ];
     for (name, expected_hex) in cases {
-        let svg =
-            format!(r##"<svg viewBox="0 0 24 24"><path d="M0,0 L1,1" fill="{name}"/></svg>"##);
+        let svg = format!(
+            r##"<svg viewBox="0 0 24 24"><path d="M0,0 L1,1" fill="{name}"/></svg>"##
+        );
         let out = convert_svg(svg.as_bytes())
             .unwrap_or_else(|e| panic!("failed to convert with fill={name}: {e}"));
         assert!(

@@ -5,11 +5,6 @@ resolver = "2"
 members = [
     "svg-converter-core",
     "desktop",
-    "cli",
-]
-exclude = [
-    "tauri/src-tauri",
-    "viewer/src-tauri",
 ]
 
 [workspace.package]

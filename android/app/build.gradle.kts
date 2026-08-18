@@ -87,18 +87,13 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
     val abiDirs = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 
     onlyIf {
-        // In CI, android.yml's own explicit `cargo ndk` step (run once,
-        // before `./gradlew assembleRelease`) is authoritative — this task
-        // would otherwise duplicate that exact build on every run, since
-        // GitHub Actions sets CI=true unconditionally. Locally, this task
-        // is a convenience: build the missing ABIs automatically.
         val isCi = System.getenv("CI") == "true"
-        val shouldRun = !isCi && abiDirs.any { abi ->
+        val shouldRun = isCi || abiDirs.any { abi ->
             val abiDir = file("$jniLibsDir/$abi")
             !abiDir.exists() || abiDir.listFiles()?.isEmpty() == true
         }
         if (!shouldRun) {
-            println("Skipping cargo-ndk build (CI supplies jniLibs, or libs already exist locally)")
+            println("Skipping cargo-ndk build (libs exist)")
         }
         shouldRun
     }

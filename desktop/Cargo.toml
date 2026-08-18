@@ -13,7 +13,9 @@ version = "0.2.0"
 edition = "2021"
 authors = ["Suhail Muzaffari <so.muzaff@gmail.com>"]
 license = "LicenseRef-Proprietary"
-description = "Watermelon Vector Converter — SVG <-> Android VectorDrawable converter and viewer"
+license-file = ["../LICENSE", "0"]
+description = "Convert between SVG and Android VectorDrawable XML — native desktop app, no WebView"
+repository = "https://github.com/muzaff-beep/Watermelon-VectorConverter"
 
 [[bin]]
 name = "wvgc-desktop"
@@ -36,9 +38,6 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 
-[target.'cfg(windows)'.build-dependencies]
-winres = "0.1"
-
 # core-foundation is a mature, complete crate used only for safe CFString
 # construction/lifetime management. LSSetDefaultRoleHandlerForContentType
 # itself is called via a direct, hand-written extern "C" FFI declaration
@@ -49,25 +48,22 @@ winres = "0.1"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
 
-# Debian packaging (`cargo deb -p wvgc-desktop`). wvgc-cli is a separate
-# workspace crate, so cargo-deb won't discover its binary on its own — it's
-# added explicitly as an asset below, alongside the desktop launcher entry
-# and the app icon (built from ../icons/watermelon_master.svg).
+# cargo-deb reads this to build a real .deb package (see .github/workflows/
+# desktop.yml). $auto lets cargo-deb infer runtime shared-library
+# dependencies (X11/Wayland/GTK) from the built binary itself, rather than
+# hand-maintaining a version-pinned list that would drift out of date.
 [package.metadata.deb]
-name = "watermelon-vector-converter"
 maintainer = "Suhail Muzaffari <so.muzaff@gmail.com>"
 copyright = "2026, Suhail Muzaffari"
-license-file = ["../LICENSE", "0"]
 extended-description = """\
-A fast, fully offline converter between SVG vector graphics and Android \
-VectorDrawable XML, in both directions. Includes the converter GUI, a \
-lightweight file viewer, and the wvgc-cli command-line tool."""
+Convert between SVG vector graphics and Android VectorDrawable XML, in both \
+directions, with single-file and batch (ZIP) conversion, plus a built-in \
+viewer for previewing SVG and VectorDrawable files (including animated \
+VectorDrawables) — fully offline, no network access."""
 depends = "$auto"
 section = "graphics"
 priority = "optional"
 assets = [
     ["target/release/wvgc-desktop", "usr/bin/", "755"],
-    ["target/release/wvgc-cli", "usr/bin/", "755"],
-    ["debian/watermelon-vector-converter.desktop", "usr/share/applications/", "644"],
-    ["../icons/png/256.png", "usr/share/icons/hicolor/256x256/apps/watermelon-vector-converter.png", "644"],
+    ["assets/watermelon-vector-converter.desktop", "usr/share/applications/", "644"],
 ]

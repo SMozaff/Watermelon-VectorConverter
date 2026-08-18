@@ -18,19 +18,10 @@ pub fn emit(svg: &NormalizedSvg) -> String {
     // 24dp is the Material Design icon baseline; viewport preserves coordinate space.
     s.push_str("    android:width=\"24dp\"\n");
     s.push_str("    android:height=\"24dp\"\n");
-    s.push_str(&format!(
-        "    android:viewportWidth=\"{}\"\n",
-        fmt_num(svg.viewport_w)
-    ));
-    s.push_str(&format!(
-        "    android:viewportHeight=\"{}\"",
-        fmt_num(svg.viewport_h)
-    ));
+    s.push_str(&format!("    android:viewportWidth=\"{}\"\n", fmt_num(svg.viewport_w)));
+    s.push_str(&format!("    android:viewportHeight=\"{}\"", fmt_num(svg.viewport_h)));
     if svg.root_alpha < 1.0 {
-        s.push_str(&format!(
-            "\n    android:alpha=\"{}\"",
-            fmt_num(svg.root_alpha)
-        ));
+        s.push_str(&format!("\n    android:alpha=\"{}\"", fmt_num(svg.root_alpha)));
     }
     s.push_str(">\n");
     for node in &svg.nodes {
@@ -40,9 +31,7 @@ pub fn emit(svg: &NormalizedSvg) -> String {
     s
 }
 
-fn indent(level: usize) -> String {
-    "    ".repeat(level)
-}
+fn indent(level: usize) -> String { "    ".repeat(level) }
 
 fn emit_node(node: &Node, level: usize, s: &mut String) {
     match node {
@@ -54,48 +43,13 @@ fn emit_node(node: &Node, level: usize, s: &mut String) {
 fn emit_group(g: &VdGroup, level: usize, s: &mut String) {
     let pad = indent(level);
     s.push_str(&format!("{pad}<group"));
-    if g.translate_x != 0.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:translateX=\"{}\"",
-            fmt_num(g.translate_x)
-        ));
-    }
-    if g.translate_y != 0.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:translateY=\"{}\"",
-            fmt_num(g.translate_y)
-        ));
-    }
-    if g.scale_x != 1.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:scaleX=\"{}\"",
-            fmt_num(g.scale_x)
-        ));
-    }
-    if g.scale_y != 1.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:scaleY=\"{}\"",
-            fmt_num(g.scale_y)
-        ));
-    }
-    if g.rotation != 0.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:rotation=\"{}\"",
-            fmt_num(g.rotation)
-        ));
-    }
-    if g.pivot_x != 0.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:pivotX=\"{}\"",
-            fmt_num(g.pivot_x)
-        ));
-    }
-    if g.pivot_y != 0.0 {
-        s.push_str(&format!(
-            "\n{pad}    android:pivotY=\"{}\"",
-            fmt_num(g.pivot_y)
-        ));
-    }
+    if g.translate_x != 0.0 { s.push_str(&format!("\n{pad}    android:translateX=\"{}\"", fmt_num(g.translate_x))); }
+    if g.translate_y != 0.0 { s.push_str(&format!("\n{pad}    android:translateY=\"{}\"", fmt_num(g.translate_y))); }
+    if g.scale_x != 1.0 { s.push_str(&format!("\n{pad}    android:scaleX=\"{}\"", fmt_num(g.scale_x))); }
+    if g.scale_y != 1.0 { s.push_str(&format!("\n{pad}    android:scaleY=\"{}\"", fmt_num(g.scale_y))); }
+    if g.rotation != 0.0 { s.push_str(&format!("\n{pad}    android:rotation=\"{}\"", fmt_num(g.rotation))); }
+    if g.pivot_x != 0.0 { s.push_str(&format!("\n{pad}    android:pivotX=\"{}\"", fmt_num(g.pivot_x))); }
+    if g.pivot_y != 0.0 { s.push_str(&format!("\n{pad}    android:pivotY=\"{}\"", fmt_num(g.pivot_y))); }
     s.push_str(">\n");
     if let Some(cp) = &g.clip_path {
         let ipad = indent(level + 1);
@@ -121,16 +75,10 @@ fn emit_path(p: &VdPath, level: usize, s: &mut String) {
     if let Some(sc) = &p.stroke_color {
         s.push_str(&format!("\n{pad}    android:strokeColor=\"{}\"", sc));
         if p.stroke_width > 0.0 {
-            s.push_str(&format!(
-                "\n{pad}    android:strokeWidth=\"{}\"",
-                fmt_num(p.stroke_width)
-            ));
+            s.push_str(&format!("\n{pad}    android:strokeWidth=\"{}\"", fmt_num(p.stroke_width)));
         }
     }
-    let ft = match p.fill_type {
-        FillType::NonZero => "nonZero",
-        FillType::EvenOdd => "evenOdd",
-    };
+    let ft = match p.fill_type { FillType::NonZero => "nonZero", FillType::EvenOdd => "evenOdd" };
     s.push_str(&format!("\n{pad}    android:fillType=\"{}\"", ft));
 
     if has_gradient {
@@ -149,13 +97,7 @@ fn emit_gradient(g: &Gradient, level: usize, s: &mut String) {
     let ipad = indent(level + 1);
     s.push_str(&format!("{pad}<aapt:attr name=\"android:fillColor\">\n"));
     match g {
-        Gradient::Linear {
-            x1,
-            y1,
-            x2,
-            y2,
-            stops,
-        } => {
+        Gradient::Linear { x1, y1, x2, y2, stops } => {
             s.push_str(&format!("{ipad}<gradient\n"));
             s.push_str(&format!("{ipad}    android:type=\"linear\"\n"));
             s.push_str(&format!("{ipad}    android:startX=\"{}\"\n", fmt_num(*x1)));
@@ -170,10 +112,7 @@ fn emit_gradient(g: &Gradient, level: usize, s: &mut String) {
             s.push_str(&format!("{ipad}    android:type=\"radial\"\n"));
             s.push_str(&format!("{ipad}    android:centerX=\"{}\"\n", fmt_num(*cx)));
             s.push_str(&format!("{ipad}    android:centerY=\"{}\"\n", fmt_num(*cy)));
-            s.push_str(&format!(
-                "{ipad}    android:gradientRadius=\"{}\">\n",
-                fmt_num(*r)
-            ));
+            s.push_str(&format!("{ipad}    android:gradientRadius=\"{}\">\n", fmt_num(*r)));
             emit_stops(stops, level + 2, s);
             s.push_str(&format!("{ipad}</gradient>\n"));
         }
@@ -184,10 +123,7 @@ fn emit_gradient(g: &Gradient, level: usize, s: &mut String) {
 fn emit_stops(stops: &[GradientStop], level: usize, s: &mut String) {
     let pad = indent(level);
     for st in stops {
-        s.push_str(&format!(
-            "{pad}<item android:offset=\"{}\" android:color=\"{}\"/>\n",
-            fmt_num(st.offset),
-            st.color
-        ));
+        s.push_str(&format!("{pad}<item android:offset=\"{}\" android:color=\"{}\"/>\n",
+            fmt_num(st.offset), st.color));
     }
 }

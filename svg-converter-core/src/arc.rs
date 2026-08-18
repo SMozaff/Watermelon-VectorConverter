@@ -10,19 +10,12 @@ use std::f64::consts::PI;
 
 /// Returns a sequence of cubic control points (x1,y1,x2,y2,x,y) approximating
 /// the arc from (x0,y0) to (x,y) with the given rx,ry,x_axis_rotation(deg),
-/// large_arc flag and sweep flag. The flat signature matches SVG's native arc
-/// command fields and keeps parsing call sites allocation-free.
-#[allow(clippy::too_many_arguments)]
+/// large_arc flag and sweep flag.
 pub fn arc_to_cubics(
-    x0: f64,
-    y0: f64,
-    mut rx: f64,
-    mut ry: f64,
-    x_axis_rot_deg: f64,
-    large_arc: bool,
-    sweep: bool,
-    x: f64,
-    y: f64,
+    x0: f64, y0: f64,
+    mut rx: f64, mut ry: f64, x_axis_rot_deg: f64,
+    large_arc: bool, sweep: bool,
+    x: f64, y: f64,
 ) -> Vec<[f64; 6]> {
     // Degenerate: zero radius or same point -> straight line as a single cubic.
     if rx == 0.0 || ry == 0.0 || (x0 == x && y0 == y) {
@@ -64,24 +57,13 @@ pub fn arc_to_cubics(
         let dot = ux * vx + uy * vy;
         let len = (ux * ux + uy * uy).sqrt() * (vx * vx + vy * vy).sqrt();
         let mut a = (dot / len).clamp(-1.0, 1.0).acos();
-        if ux * vy - uy * vx < 0.0 {
-            a = -a;
-        }
+        if ux * vy - uy * vx < 0.0 { a = -a; }
         a
     };
     let theta1 = ang(1.0, 0.0, (x1p - cxp) / rx, (y1p - cyp) / ry);
-    let mut dtheta = ang(
-        (x1p - cxp) / rx,
-        (y1p - cyp) / ry,
-        (-x1p - cxp) / rx,
-        (-y1p - cyp) / ry,
-    );
-    if !sweep && dtheta > 0.0 {
-        dtheta -= 2.0 * PI;
-    }
-    if sweep && dtheta < 0.0 {
-        dtheta += 2.0 * PI;
-    }
+    let mut dtheta = ang((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
+    if !sweep && dtheta > 0.0 { dtheta -= 2.0 * PI; }
+    if sweep && dtheta < 0.0 { dtheta += 2.0 * PI; }
 
     // Step 5: split into segments <= 90 degrees, approximate each by a cubic.
     let segs = (dtheta.abs() / (PI / 2.0)).ceil().max(1.0) as usize;
@@ -112,12 +94,9 @@ pub fn arc_to_cubics(
         let d2y = -rx * sa2 * sin_phi + ry * ca2 * cos_phi;
         let _ = c1x;
         out.push([
-            x1 + t * d1x,
-            y1 + t * d1y,
-            x2 - t * d2x,
-            y2 - t * d2y,
-            x2,
-            y2,
+            x1 + t * d1x, y1 + t * d1y,
+            x2 - t * d2x, y2 - t * d2y,
+            x2, y2,
         ]);
         th = th2;
     }

@@ -40,10 +40,8 @@ pub struct RevGroup {
 
 impl RevGroup {
     pub fn is_identity_transform(&self) -> bool {
-        self.translate_x == 0.0
-            && self.translate_y == 0.0
-            && self.scale_x == 1.0
-            && self.scale_y == 1.0
+        self.translate_x == 0.0 && self.translate_y == 0.0
+            && self.scale_x == 1.0 && self.scale_y == 1.0
             && self.rotation == 0.0
     }
 }
@@ -56,19 +54,8 @@ pub struct RevGradientStop {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RevGradient {
-    Linear {
-        x1: f32,
-        y1: f32,
-        x2: f32,
-        y2: f32,
-        stops: Vec<RevGradientStop>,
-    },
-    Radial {
-        cx: f32,
-        cy: f32,
-        r: f32,
-        stops: Vec<RevGradientStop>,
-    },
+    Linear { x1: f32, y1: f32, x2: f32, y2: f32, stops: Vec<RevGradientStop> },
+    Radial { cx: f32, cy: f32, r: f32, stops: Vec<RevGradientStop> },
 }
 
 #[derive(Debug, Clone, PartialEq)]

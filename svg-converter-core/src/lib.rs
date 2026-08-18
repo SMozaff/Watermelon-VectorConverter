@@ -12,23 +12,22 @@
 //!     render_avd_frames (C-5.2) is scaffolding only, pending the Phase 0
 //!     test corpus — see animation_engine.rs.
 
-pub mod analysis;
-pub mod animation;
-pub mod animation_engine;
-pub mod arc;
-pub mod batch_processor;
 pub mod error;
-pub mod gradients;
-pub mod image_export;
-pub mod limits;
 pub mod models;
-pub mod shapes;
-pub mod svg_emit;
 pub mod svg_parser;
+pub mod shapes;
+pub mod arc;
+pub mod gradients;
+pub mod vector_drawable;
 pub mod utils;
+pub mod image_export;
+pub mod batch_processor;
+pub mod analysis;
 pub mod vd_models;
 pub mod vd_parser;
-pub mod vector_drawable;
+pub mod svg_emit;
+pub mod animation;
+pub mod animation_engine;
 
 // FFI bridge (Module B). jni.rs gates its whole contents behind
 // #![cfg(target_os = "android")] and the `jni` crate is an Android-only

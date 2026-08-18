@@ -6,18 +6,6 @@ mod viewer;
 
 use std::path::PathBuf;
 
-// Baked into the binary so the window icon never depends on a runtime file
-// path (installers place the binary in different locations per OS/package).
-const ICON_PNG: &[u8] = include_bytes!("../../../icons/png/256.png");
-
-fn window_settings() -> iced::window::Settings {
-    let icon = iced::window::icon::from_file_data(ICON_PNG, None).ok();
-    iced::window::Settings {
-        icon,
-        ..iced::window::Settings::default()
-    }
-}
-
 pub fn run_converter() -> iced::Result {
     iced::application(
         converter::Converter::new,
@@ -26,8 +14,7 @@ pub fn run_converter() -> iced::Result {
     )
     .title("Watermelon Vector Converter")
     .subscription(converter::Converter::subscription)
-    .theme(|_: &_| iced::Theme::Dark)
-    .window(window_settings())
+    .theme(|_state| iced::Theme::Dark)
     .run()
 }
 
@@ -42,8 +29,7 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
     )
     .title("Watermelon Vector Viewer")
     .subscription(viewer::Viewer::subscription)
-    .theme(|_: &_| iced::Theme::Dark)
-    .window(window_settings())
+    .theme(|_state| iced::Theme::Dark)
     .run()
 }
 
@@ -52,10 +38,6 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
 /// doesn't need to depend on the core crate's internal module path in
 /// every match arm — kept in exact 1:1 correspondence with the real enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(
-    dead_code,
-    reason = "reserved UI mapping for future animated-preview controls"
-)]
 pub enum AnimKind {
     None,
     Avd,

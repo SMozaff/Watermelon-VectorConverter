@@ -19,10 +19,6 @@ use std::time::Duration;
 use svg_converter_core::animation::{detect_animation, AnimationKind, FileKind};
 
 #[derive(Debug, Clone)]
-#[expect(
-    dead_code,
-    reason = "file-arrival routing is retained for the single-instance integration"
-)]
 pub enum Message {
     OpenFilePicked(Option<PathBuf>),
     OpenFileRequested,
@@ -39,44 +35,18 @@ pub enum Message {
 /// WebView-only path this rewrite deliberately drops.
 #[derive(Debug, Clone)]
 pub enum LoadedFile {
-    Static {
-        name: String,
-        png: Vec<u8>,
-    },
-    Avd {
-        name: String,
-        frames: Vec<Vec<u8>>,
-        frame_durations_ms: Vec<u32>,
-    },
-    UnsupportedAnimatedSvg {
-        name: String,
-    },
+    Static { name: String, png: Vec<u8> },
+    Avd { name: String, frames: Vec<Vec<u8>>, frame_durations_ms: Vec<u32> },
+    UnsupportedAnimatedSvg { name: String },
 }
 
-#[expect(
-    dead_code,
-    reason = "empty viewer state is retained for startup and reset behavior"
-)]
 enum ViewState {
     Empty,
     Loading,
-    Static {
-        name: String,
-        handle: image::Handle,
-    },
-    Avd {
-        name: String,
-        handles: Vec<image::Handle>,
-        frame_durations_ms: Vec<u32>,
-        current: usize,
-        elapsed_in_frame: Duration,
-    },
-    Unsupported {
-        name: String,
-    },
-    Error {
-        message: String,
-    },
+    Static { name: String, handle: image::Handle },
+    Avd { name: String, handles: Vec<image::Handle>, frame_durations_ms: Vec<u32>, current: usize, elapsed_in_frame: Duration },
+    Unsupported { name: String },
+    Error { message: String },
 }
 
 pub struct Viewer {
@@ -85,13 +55,8 @@ pub struct Viewer {
 
 impl Viewer {
     pub fn new(initial_path: PathBuf) -> (Self, Task<Message>) {
-        let viewer = Viewer {
-            state: ViewState::Loading,
-        };
-        (
-            viewer,
-            Task::perform(load_file(initial_path), Message::FileLoaded),
-        )
+        let viewer = Viewer { state: ViewState::Loading };
+        (viewer, Task::perform(load_file(initial_path), Message::FileLoaded))
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -114,11 +79,7 @@ impl Viewer {
                         name,
                         handle: image::Handle::from_bytes(png),
                     },
-                    LoadedFile::Avd {
-                        name,
-                        frames,
-                        frame_durations_ms,
-                    } => {
+                    LoadedFile::Avd { name, frames, frame_durations_ms } => {
                         let handles = frames.into_iter().map(image::Handle::from_bytes).collect();
                         ViewState::Avd {
                             name,
@@ -128,7 +89,9 @@ impl Viewer {
                             elapsed_in_frame: Duration::ZERO,
                         }
                     }
-                    LoadedFile::UnsupportedAnimatedSvg { name } => ViewState::Unsupported { name },
+                    LoadedFile::UnsupportedAnimatedSvg { name } => {
+                        ViewState::Unsupported { name }
+                    }
                 };
             }
             Message::FileLoaded(Err(message)) => {
@@ -143,14 +106,7 @@ impl Viewer {
                 // mirrors the same "frame-swap on a timer" approach the
                 // Tauri/Svelte version used, just driven by iced's own
                 // subscription instead of setTimeout.
-                if let ViewState::Avd {
-                    handles,
-                    frame_durations_ms,
-                    current,
-                    elapsed_in_frame,
-                    ..
-                } = &mut self.state
-                {
+                if let ViewState::Avd { handles, frame_durations_ms, current, elapsed_in_frame, .. } = &mut self.state {
                     const TICK: Duration = Duration::from_millis(16);
                     *elapsed_in_frame += TICK;
                     let this_frame_duration = frame_durations_ms
@@ -274,11 +230,7 @@ async fn load_file(path: PathBuf) -> Result<LoadedFile, String> {
         })
         .unwrap_or(false);
 
-    let file_kind = if is_vector_drawable {
-        FileKind::Avd
-    } else {
-        FileKind::Svg
-    };
+    let file_kind = if is_vector_drawable { FileKind::Avd } else { FileKind::Svg };
     let anim_kind = detect_animation(&bytes, file_kind);
 
     match anim_kind {
