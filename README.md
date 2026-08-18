@@ -3,6 +3,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-purple?logo=rust)](https://www.rust-lang.org/)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-2024.10-6200EE?logo=android&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-2.x-purple?logo=tauri)](https://tauri.app/)
 [![TypeScript](https://img.shields.io/badge/typescript-5.x-3178C6.svg?logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Vite](https://img.shields.io/badge/vite-6.x-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev)
 [![Tailwind CSS](https://img.shields.io/badge/tailwindcss-4.x-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
@@ -13,7 +14,6 @@
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Rust Version](https://img.shields.io/badge/Rust-1.75%2B-orange)](https://www.rust-lang.org/)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-green?logo=android)](https://developer.android.com/)
-[![Tauri](https://img.shields.io/badge/Tauri-2.x-purple?logo=tauri)](https://tauri.app/)
 
 **A fast, fully offline, multiplatform converter between SVG vector graphics
 and Android VectorDrawable XML — in both directions.**
