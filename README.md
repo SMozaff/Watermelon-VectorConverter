@@ -8,7 +8,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![Version](https://img.shields.io/badge/version-1.7.0-green)]()
 [![Built with Rust](https://img.shields.io/badge/Built%20with-Rust-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![Rust Version](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org/)
+[![Rust Version](https://img.shields.io/badge/Rust-1.75%2B-orange)](https://www.rust-lang.org/)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-green?logo=android)](https://developer.android.com/)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-purple?logo=tauri)](https://tauri.app/)
 
