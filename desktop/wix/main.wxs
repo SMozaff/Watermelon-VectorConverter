@@ -147,7 +147,13 @@
 
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
 
-        <Icon Id='ProductICO' SourceFile='..\icons\watermelon.ico'/>
+        <!-- wix/watermelon.ico is a checked-in copy of ../../icons/watermelon.ico:
+             candle/light resolve relative SourceFile paths against the cwd
+             cargo-wix invokes them from, which isn't reliably the crate
+             root across cargo-wix versions and platforms, so a copy
+             alongside this .wxs file removes the ambiguity. Keep it in
+             sync if the master icon in icons/ is regenerated. -->
+        <Icon Id='ProductICO' SourceFile='wix\watermelon.ico'/>
         <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
 
         <UI>
