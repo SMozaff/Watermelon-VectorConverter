@@ -147,13 +147,16 @@
 
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize'/>
 
-        <!-- wix/watermelon.ico is a checked-in copy of ../../icons/watermelon.ico:
-             candle/light resolve relative SourceFile paths against the cwd
-             cargo-wix invokes them from, which isn't reliably the crate
-             root across cargo-wix versions and platforms, so a copy
-             alongside this .wxs file removes the ambiguity. Keep it in
-             sync if the master icon in icons/ is regenerated. -->
-        <Icon Id='ProductICO' SourceFile='wix\watermelon.ico'/>
+        <!-- Both a crate-root-relative path (..\icons\watermelon.ico) and a
+             wxs-directory-relative path (wix\watermelon.ico) failed here
+             with "LGHT0103: The system cannot find the file", since
+             candle/light's actual working directory when invoked by
+             cargo-wix doesn't match either assumption reliably. An
+             absolute path via a WiX environment-variable reference
+             sidesteps the ambiguity: the CI workflow sets
+             WATERMELON_ICON_ICO to an absolute path before calling
+             `cargo wix`. -->
+        <Icon Id='ProductICO' SourceFile='$(env.WATERMELON_ICON_ICO)'/>
         <Property Id='ARPPRODUCTICON' Value='ProductICO'/>
 
         <UI>

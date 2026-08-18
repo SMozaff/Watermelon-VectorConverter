@@ -77,6 +77,8 @@ jobs:
       - name: Build MSI installer
         if: runner.os == 'Windows'
         run: cargo wix -p wvgc-desktop --nocapture --target ${{ matrix.target }}
+        env:
+          WATERMELON_ICON_ICO: ${{ github.workspace }}\icons\watermelon.ico
 
       - name: Rename MSI
         if: runner.os == 'Windows'
