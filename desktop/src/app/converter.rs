@@ -80,10 +80,7 @@ impl Converter {
             .style(|_| progress_bar::Style {
                 background: Background::Color(Color::from_rgb8(12, 35, 22)),
                 bar: Background::Color(GLOW_GREEN),
-                border: Border::default()
-                    .rounded(8.0)
-                    .width(1.0)
-                    .color(RIND_GREEN),
+                border: Border::default().rounded(8.0).width(1.0).color(RIND_GREEN),
             });
 
         let content = column![

@@ -12,7 +12,6 @@ name = "wvgc-desktop"
 version = "0.2.0"
 edition = "2021"
 authors = ["Suhail Muzaffari <so.muzaff@gmail.com>"]
-license = "LicenseRef-Proprietary"
 license-file = "../LICENSE"
 description = "Convert between SVG and Android VectorDrawable XML — native desktop app, no WebView"
 repository = "https://github.com/muzaff-beep/Watermelon-VectorConverter"

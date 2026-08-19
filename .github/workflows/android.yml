@@ -1,6 +1,7 @@
 name: android
 
 on:
+  push:
   workflow_dispatch:
 
 permissions:
@@ -19,7 +20,7 @@ jobs:
           java-version: "17"
 
       - name: Set up Rust + Android targets
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
 
@@ -136,7 +137,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.97.1
         with: { targets: "aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android" }
       - run: cargo install cargo-ndk --locked
       - uses: android-actions/setup-android@v3

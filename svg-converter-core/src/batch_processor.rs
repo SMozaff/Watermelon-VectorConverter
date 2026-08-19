@@ -10,6 +10,7 @@
 use crate::convert_svg;
 use crate::convert_vd;
 use crate::error::ConversionError;
+use crate::limits;
 use rayon::prelude::*;
 use std::io::{Cursor, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,10 +37,18 @@ pub fn convert_zip(
     progress: &(dyn Fn(ProgressEvent) + Send + Sync),
     cancel: &CancelFlag,
 ) -> Result<Vec<u8>, ConversionError> {
+    limits::ensure_zip_input_size(zip_bytes)?;
     let mut archive = zip::ZipArchive::new(Cursor::new(zip_bytes))
         .map_err(|e| ConversionError::ZipReadError(e.to_string()))?;
+    if archive.len() > limits::MAX_ZIP_ENTRIES {
+        return Err(ConversionError::InputLimit(format!(
+            "ZIP archive exceeds the {}-entry limit",
+            limits::MAX_ZIP_ENTRIES
+        )));
+    }
 
     let mut inputs: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut total_uncompressed_bytes = 0u64;
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -47,6 +56,14 @@ pub fn convert_zip(
         let name = entry.name().to_string();
         if !name.to_ascii_lowercase().ends_with(".svg") {
             continue;
+        }
+        limits::validate_archive_entry(&name, entry.size(), entry.compressed_size())?;
+        total_uncompressed_bytes = total_uncompressed_bytes.saturating_add(entry.size());
+        if total_uncompressed_bytes > limits::MAX_ZIP_UNCOMPRESSED_BYTES {
+            return Err(ConversionError::InputLimit(format!(
+                "ZIP archive exceeds the {} MiB uncompressed-size limit",
+                limits::MAX_ZIP_UNCOMPRESSED_BYTES / 1024 / 1024
+            )));
         }
         let mut buf = Vec::with_capacity(entry.size() as usize);
         entry
@@ -89,11 +106,9 @@ pub fn convert_zip(
             // tx (and all clones) dropped here -> rx iteration ends
         });
 
-        let mut done = 0u32;
-        for outcome in rx.iter() {
-            done += 1;
+        for (index, outcome) in rx.iter().enumerate() {
             progress(ProgressEvent {
-                done,
+                done: (index + 1) as u32,
                 total,
                 current_name: outcome.name.clone(),
             });
@@ -110,8 +125,8 @@ pub fn convert_zip(
     let mut out = Vec::new();
     {
         let mut zw = zip::ZipWriter::new(Cursor::new(&mut out));
-        let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let opts: zip::write::FileOptions<()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for outcome in &outcomes {
             match &outcome.result {
                 Ok(xml) => {
@@ -150,8 +165,8 @@ pub fn zip_files_into_archive(files: &[(String, Vec<u8>)]) -> Result<Vec<u8>, Co
     let mut out = Vec::new();
     {
         let mut zw = zip::ZipWriter::new(Cursor::new(&mut out));
-        let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let opts: zip::write::FileOptions<()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, bytes) in files {
             zw.start_file(name, opts)
                 .map_err(|e| ConversionError::ZipWriteError(e.to_string()))?;
@@ -173,10 +188,18 @@ pub fn convert_vd_zip(
     progress: &(dyn Fn(ProgressEvent) + Send + Sync),
     cancel: &CancelFlag,
 ) -> Result<Vec<u8>, ConversionError> {
+    limits::ensure_zip_input_size(zip_bytes)?;
     let mut archive = zip::ZipArchive::new(Cursor::new(zip_bytes))
         .map_err(|e| ConversionError::ZipReadError(e.to_string()))?;
+    if archive.len() > limits::MAX_ZIP_ENTRIES {
+        return Err(ConversionError::InputLimit(format!(
+            "ZIP archive exceeds the {}-entry limit",
+            limits::MAX_ZIP_ENTRIES
+        )));
+    }
 
     let mut inputs: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut total_uncompressed_bytes = 0u64;
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -184,6 +207,14 @@ pub fn convert_vd_zip(
         let name = entry.name().to_string();
         if !name.to_ascii_lowercase().ends_with(".xml") {
             continue;
+        }
+        limits::validate_archive_entry(&name, entry.size(), entry.compressed_size())?;
+        total_uncompressed_bytes = total_uncompressed_bytes.saturating_add(entry.size());
+        if total_uncompressed_bytes > limits::MAX_ZIP_UNCOMPRESSED_BYTES {
+            return Err(ConversionError::InputLimit(format!(
+                "ZIP archive exceeds the {} MiB uncompressed-size limit",
+                limits::MAX_ZIP_UNCOMPRESSED_BYTES / 1024 / 1024
+            )));
         }
         let mut buf = Vec::with_capacity(entry.size() as usize);
         entry
@@ -221,11 +252,9 @@ pub fn convert_vd_zip(
                 });
         });
 
-        let mut done = 0u32;
-        for outcome in rx.iter() {
-            done += 1;
+        for (index, outcome) in rx.iter().enumerate() {
             progress(ProgressEvent {
-                done,
+                done: (index + 1) as u32,
                 total,
                 current_name: outcome.name.clone(),
             });
@@ -240,8 +269,8 @@ pub fn convert_vd_zip(
     let mut out = Vec::new();
     {
         let mut zw = zip::ZipWriter::new(Cursor::new(&mut out));
-        let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+        let opts: zip::write::FileOptions<()> =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for outcome in &outcomes {
             match &outcome.result {
                 Ok(svg) => {

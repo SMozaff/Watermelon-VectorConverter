@@ -41,6 +41,11 @@ pub fn notify_existing_instance(path: &Path) -> bool {
 /// Receiver the iced application subscribes to (via a Task/Subscription)
 /// so an incoming path can update the already-open viewer window instead
 /// of a new process ever needing to exist.
+///
+/// The current viewer does not yet subscribe to this receiver; retain the
+/// cross-platform listener API for that integration without treating it as a
+/// dead implementation detail.
+#[allow(dead_code)]
 pub fn start_listener() -> Option<Receiver<PathBuf>> {
     let listener = TcpListener::bind(("127.0.0.1", SINGLE_INSTANCE_PORT)).ok()?;
     let (tx, rx): (Sender<PathBuf>, Receiver<PathBuf>) = std::sync::mpsc::channel();

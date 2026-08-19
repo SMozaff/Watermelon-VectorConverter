@@ -6,17 +6,19 @@
 //! Rejects out-of-scope features with UnsupportedFeature(1002).
 
 use crate::error::ConversionError;
-use crate::models::*;
-use crate::utils::{fmt_num, parse_rgb, to_aarrggbb};
-use crate::shapes;
 use crate::gradients;
+use crate::limits;
 use crate::models::Fill;
-use std::collections::BTreeMap;
 use crate::models::Gradient;
+use crate::models::*;
+use crate::shapes;
+use crate::utils::{fmt_num, parse_rgb, to_aarrggbb};
+use std::collections::BTreeMap;
 
-const UNSUPPORTED: &[&str] = &[
-    "filter", "text", "tspan", "pattern", "mask", "image", "use",
-];
+const UNSUPPORTED: &[&str] = &["filter", "text", "tspan", "pattern", "mask", "image", "use"];
+
+type ControlPoint = (f32, f32);
+type ControlPointState = (Option<ControlPoint>, Option<ControlPoint>);
 
 /// Inheritable SVG presentation properties, cascaded from ancestor <g>
 /// elements down to leaf shapes — mirrors the subset of CSS inheritance SVG
@@ -37,9 +39,13 @@ struct StyleContext {
 impl StyleContext {
     fn root() -> Self {
         StyleContext {
-            fill: None, stroke: None,
-            fill_opacity: None, stroke_opacity: None, opacity: None,
-            stroke_width: None, fill_rule: None,
+            fill: None,
+            stroke: None,
+            fill_opacity: None,
+            stroke_opacity: None,
+            opacity: None,
+            stroke_width: None,
+            fill_rule: None,
         }
     }
 
@@ -50,15 +56,24 @@ impl StyleContext {
     fn cascade(&self, el: &roxmltree::Node) -> StyleContext {
         let inline = parse_inline_style(el.attribute("style").unwrap_or(""));
         let get = |name: &str| -> Option<String> {
-            inline.get(name).cloned().or_else(|| el.attribute(name).map(|s| s.to_string()))
+            inline
+                .get(name)
+                .cloned()
+                .or_else(|| el.attribute(name).map(|s| s.to_string()))
         };
         StyleContext {
             fill: get("fill").or_else(|| self.fill.clone()),
             stroke: get("stroke").or_else(|| self.stroke.clone()),
-            fill_opacity: get("fill-opacity").and_then(|s| s.parse().ok()).or(self.fill_opacity),
-            stroke_opacity: get("stroke-opacity").and_then(|s| s.parse().ok()).or(self.stroke_opacity),
+            fill_opacity: get("fill-opacity")
+                .and_then(|s| s.parse().ok())
+                .or(self.fill_opacity),
+            stroke_opacity: get("stroke-opacity")
+                .and_then(|s| s.parse().ok())
+                .or(self.stroke_opacity),
             opacity: get("opacity").and_then(|s| s.parse().ok()).or(self.opacity),
-            stroke_width: get("stroke-width").and_then(|s| s.parse().ok()).or(self.stroke_width),
+            stroke_width: get("stroke-width")
+                .and_then(|s| s.parse().ok())
+                .or(self.stroke_width),
             fill_rule: get("fill-rule").or_else(|| self.fill_rule.clone()),
         }
     }
@@ -74,7 +89,9 @@ fn parse_inline_style(style: &str) -> std::collections::HashMap<String, String> 
             let mut parts = decl.splitn(2, ':');
             let prop = parts.next()?.trim();
             let val = parts.next()?.trim();
-            if prop.is_empty() || val.is_empty() { return None; }
+            if prop.is_empty() || val.is_empty() {
+                return None;
+            }
             Some((prop.to_string(), val.to_string()))
         })
         .collect()
@@ -82,7 +99,10 @@ fn parse_inline_style(style: &str) -> std::collections::HashMap<String, String> 
 fn collect_clip_paths(doc: &roxmltree::Document) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for node in doc.descendants().filter(|n| n.has_tag_name("clipPath")) {
-        let id = match node.attribute("id") { Some(i) => i.to_string(), None => continue };
+        let id = match node.attribute("id") {
+            Some(i) => i.to_string(),
+            None => continue,
+        };
         for child in node.children().filter(|n| n.is_element()) {
             let tag = child.tag_name().name();
             let raw = match tag {
@@ -112,9 +132,10 @@ fn resolve_clip_path(el: &roxmltree::Node, clips: &BTreeMap<String, String>) -> 
 }
 
 pub fn parse(svg_bytes: &[u8]) -> Result<NormalizedSvg, ConversionError> {
+    limits::ensure_input_size(svg_bytes, "SVG input")?;
     let text = std::str::from_utf8(svg_bytes)
         .map_err(|e| ConversionError::InvalidSvg(format!("not UTF-8: {e}")))?;
-    let doc = roxmltree::Document::parse(text)
+    let doc = roxmltree::Document::parse_with_options(text, limits::xml_options())
         .map_err(|e| ConversionError::InvalidSvg(e.to_string()))?;
     let root = doc.root_element();
     if root.tag_name().name() != "svg" {
@@ -145,14 +166,21 @@ pub fn parse(svg_bytes: &[u8]) -> Result<NormalizedSvg, ConversionError> {
     }
 
     Ok(NormalizedSvg {
-        width, height, viewport_w: vw, viewport_h: vh, root_alpha, nodes,
+        width,
+        height,
+        viewport_w: vw,
+        viewport_h: vh,
+        root_alpha,
+        nodes,
     })
 }
 
 fn parse_viewbox(root: &roxmltree::Node) -> Result<(f32, f32), ConversionError> {
     if let Some(vb) = root.attribute("viewBox") {
-        let parts: Vec<f32> = vb.split_whitespace()
-            .filter_map(|s| s.parse().ok()).collect();
+        let parts: Vec<f32> = vb
+            .split_whitespace()
+            .filter_map(|s| s.parse().ok())
+            .collect();
         if parts.len() == 4 {
             return Ok((parts[2], parts[3]));
         }
@@ -163,16 +191,24 @@ fn parse_viewbox(root: &roxmltree::Node) -> Result<(f32, f32), ConversionError> 
     let h = svg_attr_f32(root, "height");
     match (w, h) {
         (Some(w), Some(h)) => Ok((w, h)),
-        _ => Err(ConversionError::InvalidSvg("no viewBox or width/height".into())),
+        _ => Err(ConversionError::InvalidSvg(
+            "no viewBox or width/height".into(),
+        )),
     }
 }
 
-fn parse_node(el: &roxmltree::Node, grads: &BTreeMap<String, Gradient>, clips: &BTreeMap<String, String>, ctx: &StyleContext) -> Result<Option<Node>, ConversionError> {
+fn parse_node(
+    el: &roxmltree::Node,
+    grads: &BTreeMap<String, Gradient>,
+    clips: &BTreeMap<String, String>,
+    ctx: &StyleContext,
+) -> Result<Option<Node>, ConversionError> {
     let tag = el.tag_name().name();
     let own_ctx = ctx.cascade(el);
     match tag {
         "path" => {
-            let d = el.attribute("d")
+            let d = el
+                .attribute("d")
                 .ok_or_else(|| ConversionError::InvalidSvg("<path> missing d".into()))?;
             let path_data = normalize_path_data(d)?;
             let vd_path = style_path(el, path_data, grads, &own_ctx)?;
@@ -217,7 +253,10 @@ fn parse_node(el: &roxmltree::Node, grads: &BTreeMap<String, Gradient>, clips: &
                     let vd_path = style_path(el, path_data, grads, &own_ctx)?;
                     let own_clip = resolve_clip_path(el, clips);
                     if own_clip.is_some() {
-                        let mut group = VdGroup { clip_path: own_clip, ..VdGroup::default() };
+                        let mut group = VdGroup {
+                            clip_path: own_clip,
+                            ..VdGroup::default()
+                        };
                         group.children.push(Node::Path(vd_path));
                         Ok(Some(Node::Group(group)))
                     } else {
@@ -232,9 +271,12 @@ fn parse_node(el: &roxmltree::Node, grads: &BTreeMap<String, Gradient>, clips: &
 }
 
 /// Apply fill/stroke/opacity styling to an already-normalized path-data string.
-fn style_path(el: &roxmltree::Node, path_data: String, grads: &BTreeMap<String, Gradient>, ctx: &StyleContext)
-    -> Result<VdPath, ConversionError>
-{
+fn style_path(
+    el: &roxmltree::Node,
+    path_data: String,
+    grads: &BTreeMap<String, Gradient>,
+    ctx: &StyleContext,
+) -> Result<VdPath, ConversionError> {
     let opacity = ctx.opacity.unwrap_or(1.0);
     let fill_opacity = ctx.fill_opacity.unwrap_or(1.0) * opacity;
     let stroke_opacity = ctx.stroke_opacity.unwrap_or(1.0) * opacity;
@@ -257,7 +299,9 @@ fn style_path(el: &roxmltree::Node, path_data: String, grads: &BTreeMap<String, 
         }
     };
 
-    let stroke_color = ctx.stroke.as_deref()
+    let stroke_color = ctx
+        .stroke
+        .as_deref()
         .and_then(parse_rgb)
         .map(|rgb| to_aarrggbb(rgb, stroke_opacity));
     let stroke_width = ctx.stroke_width.unwrap_or(0.0);
@@ -272,7 +316,13 @@ fn style_path(el: &roxmltree::Node, path_data: String, grads: &BTreeMap<String, 
     // class matching) will likely need it again.
     let _ = el;
 
-    Ok(VdPath { path_data, fill, stroke_color, stroke_width, fill_type })
+    Ok(VdPath {
+        path_data,
+        fill,
+        stroke_color,
+        stroke_width,
+        fill_type,
+    })
 }
 
 fn parse_group_transform(el: &roxmltree::Node) -> VdGroup {
@@ -288,7 +338,10 @@ fn apply_transform_str(t: &str, g: &mut VdGroup) {
     let mut rest = t;
     while let Some(open) = rest.find('(') {
         let name = rest[..open].trim().to_string();
-        let close = match rest[open..].find(')') { Some(c) => open + c, None => break };
+        let close = match rest[open..].find(')') {
+            Some(c) => open + c,
+            None => break,
+        };
         let args: Vec<f32> = rest[open + 1..close]
             .split([',', ' '])
             .filter(|s| !s.is_empty())
@@ -306,7 +359,10 @@ fn apply_transform_str(t: &str, g: &mut VdGroup) {
             }
             "rotate" => {
                 g.rotation += args.first().copied().unwrap_or(0.0);
-                if args.len() >= 3 { g.pivot_x = args[1]; g.pivot_y = args[2]; }
+                if args.len() >= 3 {
+                    g.pivot_x = args[1];
+                    g.pivot_y = args[2];
+                }
             }
             _ => {} // matrix/skew: out of v1 scope, left as identity
         }
@@ -320,21 +376,34 @@ fn normalize_path_data(d: &str) -> Result<String, ConversionError> {
     let tokens = tokenize(d)?;
     let mut out = String::new();
     let mut i = 0;
-    let (mut cx, mut cy) = (0.0f32, 0.0f32);   // current point
-    let (mut sx, mut sy) = (0.0f32, 0.0f32);   // subpath start
-    // last control point of the previous C/S (for S) and Q/T (for T) reflection
-    let (mut last_cubic_ctrl, mut last_quad_ctrl): (Option<(f32, f32)>, Option<(f32, f32)>) = (None, None);
+    let (mut cx, mut cy) = (0.0f32, 0.0f32); // current point
+    let (mut sx, mut sy) = (0.0f32, 0.0f32); // subpath start
+                                             // last control point of the previous C/S (for S) and Q/T (for T) reflection
+    let (mut last_cubic_ctrl, mut last_quad_ctrl): ControlPointState = (None, None);
     let mut last_cmd = ' ';
 
-    macro_rules! num { () => {{
-        let v = match tokens.get(i) { Some(Token::Num(n)) => *n, _ =>
-            return Err(ConversionError::InvalidSvg("expected number in path".into())) };
-        i += 1; v
-    }}; }
+    macro_rules! num {
+        () => {{
+            let v = match tokens.get(i) {
+                Some(Token::Num(n)) => *n,
+                _ => {
+                    return Err(ConversionError::InvalidSvg(
+                        "expected number in path".into(),
+                    ))
+                }
+            };
+            i += 1;
+            v
+        }};
+    }
 
     while i < tokens.len() {
         let cmd = match &tokens[i] {
-            Token::Cmd(c) => { i += 1; last_cmd = *c; *c }
+            Token::Cmd(c) => {
+                i += 1;
+                last_cmd = *c;
+                *c
+            }
             Token::Num(_) => implicit_cmd(last_cmd),
         };
         let abs = cmd.is_ascii_uppercase();
@@ -352,94 +421,172 @@ fn normalize_path_data(d: &str) -> Result<String, ConversionError> {
         match upper {
             'M' => {
                 let (mut x, mut y) = (num!(), num!());
-                if !abs { x += cx; y += cy; }
-                cx = x; cy = y; sx = x; sy = y;
+                if !abs {
+                    x += cx;
+                    y += cy;
+                }
+                cx = x;
+                cy = y;
+                sx = x;
+                sy = y;
                 out.push_str(&format!("M{},{} ", fmt_num(x), fmt_num(y)));
                 last_cmd = if abs { 'L' } else { 'l' };
             }
             'L' => {
                 let (mut x, mut y) = (num!(), num!());
-                if !abs { x += cx; y += cy; }
-                cx = x; cy = y;
+                if !abs {
+                    x += cx;
+                    y += cy;
+                }
+                cx = x;
+                cy = y;
                 out.push_str(&format!("L{},{} ", fmt_num(x), fmt_num(y)));
             }
             'H' => {
-                let mut x = num!(); if !abs { x += cx; }
+                let mut x = num!();
+                if !abs {
+                    x += cx;
+                }
                 cx = x;
                 out.push_str(&format!("L{},{} ", fmt_num(x), fmt_num(cy)));
             }
             'V' => {
-                let mut y = num!(); if !abs { y += cy; }
+                let mut y = num!();
+                if !abs {
+                    y += cy;
+                }
                 cy = y;
                 out.push_str(&format!("L{},{} ", fmt_num(cx), fmt_num(y)));
             }
             'C' => {
                 let mut c = [0f32; 6];
-                for k in 0..6 { c[k] = num!(); if !abs { c[k] += if k % 2 == 0 { cx } else { cy }; } }
+                for (k, value) in c.iter_mut().enumerate() {
+                    *value = num!();
+                    if !abs {
+                        *value += if k % 2 == 0 { cx } else { cy };
+                    }
+                }
                 last_cubic_ctrl = Some((c[2], c[3]));
-                cx = c[4]; cy = c[5];
-                out.push_str(&format!("C{},{} {},{} {},{} ",
-                    fmt_num(c[0]), fmt_num(c[1]), fmt_num(c[2]), fmt_num(c[3]), fmt_num(c[4]), fmt_num(c[5])));
+                cx = c[4];
+                cy = c[5];
+                out.push_str(&format!(
+                    "C{},{} {},{} {},{} ",
+                    fmt_num(c[0]),
+                    fmt_num(c[1]),
+                    fmt_num(c[2]),
+                    fmt_num(c[3]),
+                    fmt_num(c[4]),
+                    fmt_num(c[5])
+                ));
             }
             'S' => {
                 // smooth cubic: first control = reflection of previous cubic ctrl
                 let mut p = [0f32; 4];
-                for k in 0..4 { p[k] = num!(); if !abs { p[k] += if k % 2 == 0 { cx } else { cy }; } }
+                for (k, value) in p.iter_mut().enumerate() {
+                    *value = num!();
+                    if !abs {
+                        *value += if k % 2 == 0 { cx } else { cy };
+                    }
+                }
                 let (rx, ry) = match last_cubic_ctrl {
                     Some((px, py)) => (2.0 * cx - px, 2.0 * cy - py),
                     None => (cx, cy), // no previous cubic: first ctrl = current point
                 };
                 last_cubic_ctrl = Some((p[0], p[1]));
-                cx = p[2]; cy = p[3];
-                out.push_str(&format!("C{},{} {},{} {},{} ",
-                    fmt_num(rx), fmt_num(ry), fmt_num(p[0]), fmt_num(p[1]), fmt_num(p[2]), fmt_num(p[3])));
+                cx = p[2];
+                cy = p[3];
+                out.push_str(&format!(
+                    "C{},{} {},{} {},{} ",
+                    fmt_num(rx),
+                    fmt_num(ry),
+                    fmt_num(p[0]),
+                    fmt_num(p[1]),
+                    fmt_num(p[2]),
+                    fmt_num(p[3])
+                ));
             }
             'Q' => {
                 let mut c = [0f32; 4];
-                for k in 0..4 { c[k] = num!(); if !abs { c[k] += if k % 2 == 0 { cx } else { cy }; } }
+                for (k, value) in c.iter_mut().enumerate() {
+                    *value = num!();
+                    if !abs {
+                        *value += if k % 2 == 0 { cx } else { cy };
+                    }
+                }
                 last_quad_ctrl = Some((c[0], c[1]));
-                cx = c[2]; cy = c[3];
-                out.push_str(&format!("Q{},{} {},{} ",
-                    fmt_num(c[0]), fmt_num(c[1]), fmt_num(c[2]), fmt_num(c[3])));
+                cx = c[2];
+                cy = c[3];
+                out.push_str(&format!(
+                    "Q{},{} {},{} ",
+                    fmt_num(c[0]),
+                    fmt_num(c[1]),
+                    fmt_num(c[2]),
+                    fmt_num(c[3])
+                ));
             }
             'T' => {
                 // smooth quad: control = reflection of previous quad ctrl
                 let mut p = [0f32; 2];
-                for k in 0..2 { p[k] = num!(); if !abs { p[k] += if k % 2 == 0 { cx } else { cy }; } }
+                for (k, value) in p.iter_mut().enumerate() {
+                    *value = num!();
+                    if !abs {
+                        *value += if k % 2 == 0 { cx } else { cy };
+                    }
+                }
                 let (qx, qy) = match last_quad_ctrl {
                     Some((px, py)) => (2.0 * cx - px, 2.0 * cy - py),
                     None => (cx, cy),
                 };
                 last_quad_ctrl = Some((qx, qy));
-                out.push_str(&format!("Q{},{} {},{} ",
-                    fmt_num(qx), fmt_num(qy), fmt_num(p[0]), fmt_num(p[1])));
-                cx = p[0]; cy = p[1];
+                out.push_str(&format!(
+                    "Q{},{} {},{} ",
+                    fmt_num(qx),
+                    fmt_num(qy),
+                    fmt_num(p[0]),
+                    fmt_num(p[1])
+                ));
+                cx = p[0];
+                cy = p[1];
             }
             'A' => {
                 // elliptical arc -> cubic Beziers (Tier 2)
-                let rx = num!(); let ry = num!(); let rot = num!();
-                let large = num!() != 0.0; let sweep = num!() != 0.0;
+                let rx = num!();
+                let ry = num!();
+                let rot = num!();
+                let large = num!() != 0.0;
+                let sweep = num!() != 0.0;
                 let (mut x, mut y) = (num!(), num!());
-                if !abs { x += cx; y += cy; }
+                if !abs {
+                    x += cx;
+                    y += cy;
+                }
                 let cubics = crate::arc::arc_to_cubics(
-                    cx as f64, cy as f64, rx as f64, ry as f64, rot as f64,
-                    large, sweep, x as f64, y as f64,
+                    cx as f64, cy as f64, rx as f64, ry as f64, rot as f64, large, sweep, x as f64,
+                    y as f64,
                 );
                 for c in cubics {
-                    out.push_str(&format!("C{},{} {},{} {},{} ",
-                        fmt_num(c[0] as f32), fmt_num(c[1] as f32),
-                        fmt_num(c[2] as f32), fmt_num(c[3] as f32),
-                        fmt_num(c[4] as f32), fmt_num(c[5] as f32)));
+                    out.push_str(&format!(
+                        "C{},{} {},{} {},{} ",
+                        fmt_num(c[0] as f32),
+                        fmt_num(c[1] as f32),
+                        fmt_num(c[2] as f32),
+                        fmt_num(c[3] as f32),
+                        fmt_num(c[4] as f32),
+                        fmt_num(c[5] as f32)
+                    ));
                 }
-                cx = x; cy = y;
+                cx = x;
+                cy = y;
             }
             'Z' => {
-                cx = sx; cy = sy;
+                cx = sx;
+                cy = sy;
                 out.push_str("Z ");
             }
             other => {
-                return Err(ConversionError::InvalidSvg(
-                    format!("unknown path command '{other}'")));
+                return Err(ConversionError::InvalidSvg(format!(
+                    "unknown path command '{other}'"
+                )));
             }
         }
     }
@@ -452,7 +599,10 @@ fn implicit_cmd(last: char) -> char {
 }
 
 #[derive(Debug)]
-enum Token { Cmd(char), Num(f32) }
+enum Token {
+    Cmd(char),
+    Num(f32),
+}
 
 fn tokenize(d: &str) -> Result<Vec<Token>, ConversionError> {
     let mut tokens = Vec::new();
@@ -460,7 +610,10 @@ fn tokenize(d: &str) -> Result<Vec<Token>, ConversionError> {
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i] as char;
-        if c.is_ascii_whitespace() || c == ',' { i += 1; continue; }
+        if c.is_ascii_whitespace() || c == ',' {
+            i += 1;
+            continue;
+        }
         if c.is_ascii_alphabetic() {
             tokens.push(Token::Cmd(c));
             i += 1;
@@ -468,19 +621,33 @@ fn tokenize(d: &str) -> Result<Vec<Token>, ConversionError> {
         }
         // number: optional sign, digits, dot, exponent
         let start = i;
-        if c == '+' || c == '-' { i += 1; }
+        if c == '+' || c == '-' {
+            i += 1;
+        }
         let mut seen_dot = false;
         while i < bytes.len() {
             let ch = bytes[i] as char;
-            if ch.is_ascii_digit() { i += 1; }
-            else if ch == '.' && !seen_dot { seen_dot = true; i += 1; }
-            else if (ch == 'e' || ch == 'E') && i + 1 < bytes.len() {
+            if ch.is_ascii_digit() {
                 i += 1;
-                if (bytes[i] as char) == '+' || (bytes[i] as char) == '-' { i += 1; }
-            } else { break; }
+            } else if ch == '.' && !seen_dot {
+                seen_dot = true;
+                i += 1;
+            } else if (ch == 'e' || ch == 'E') && i + 1 < bytes.len() {
+                i += 1;
+                if (bytes[i] as char) == '+' || (bytes[i] as char) == '-' {
+                    i += 1;
+                }
+            } else {
+                break;
+            }
         }
-        if i == start { return Err(ConversionError::InvalidSvg(format!("bad char in path: {c}"))); }
-        let num: f32 = d[start..i].parse()
+        if i == start {
+            return Err(ConversionError::InvalidSvg(format!(
+                "bad char in path: {c}"
+            )));
+        }
+        let num: f32 = d[start..i]
+            .parse()
             .map_err(|_| ConversionError::InvalidSvg(format!("bad number: {}", &d[start..i])))?;
         tokens.push(Token::Num(num));
     }

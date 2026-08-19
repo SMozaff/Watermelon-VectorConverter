@@ -29,10 +29,17 @@ pub fn collect(doc: &roxmltree::Document) -> BTreeMap<String, Gradient> {
     let mut map = BTreeMap::new();
     for node in doc.descendants().filter(|n| n.is_element()) {
         let tag = node.tag_name().name();
-        if tag != "linearGradient" && tag != "radialGradient" { continue; }
-        let id = match node.attribute("id") { Some(i) => i.to_string(), None => continue };
+        if tag != "linearGradient" && tag != "radialGradient" {
+            continue;
+        }
+        let id = match node.attribute("id") {
+            Some(i) => i.to_string(),
+            None => continue,
+        };
         let stops = parse_stops(&node);
-        if stops.is_empty() { continue; }
+        if stops.is_empty() {
+            continue;
+        }
         let grad = if tag == "linearGradient" {
             Gradient::Linear {
                 x1: attr_f32(&node, "x1", 0.0),
@@ -61,7 +68,10 @@ fn parse_stops(grad: &roxmltree::Node) -> Vec<GradientStop> {
         // color + opacity may be in attributes or in a style="" string
         let (color_str, opacity) = stop_color_opacity(&stop);
         if let Some(rgb) = parse_rgb(&color_str) {
-            stops.push(GradientStop { offset, color: to_aarrggbb(rgb, opacity) });
+            stops.push(GradientStop {
+                offset,
+                color: to_aarrggbb(rgb, opacity),
+            });
         }
     }
     stops
@@ -69,13 +79,20 @@ fn parse_stops(grad: &roxmltree::Node) -> Vec<GradientStop> {
 
 fn stop_color_opacity(stop: &roxmltree::Node) -> (String, f32) {
     let mut color = stop.attribute("stop-color").unwrap_or("black").to_string();
-    let mut opacity = stop.attribute("stop-opacity").and_then(|s| s.parse().ok()).unwrap_or(1.0);
+    let mut opacity = stop
+        .attribute("stop-opacity")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1.0);
     if let Some(style) = stop.attribute("style") {
         for decl in style.split(';') {
             let mut kv = decl.splitn(2, ':');
             match (kv.next().map(|s| s.trim()), kv.next().map(|s| s.trim())) {
                 (Some("stop-color"), Some(v)) => color = v.to_string(),
-                (Some("stop-opacity"), Some(v)) => { if let Ok(o) = v.parse() { opacity = o; } }
+                (Some("stop-opacity"), Some(v)) => {
+                    if let Ok(o) = v.parse() {
+                        opacity = o;
+                    }
+                }
                 _ => {}
             }
         }

@@ -1,6 +1,7 @@
 name: desktop
 
 on:
+  push:
   workflow_dispatch:
 
 permissions:

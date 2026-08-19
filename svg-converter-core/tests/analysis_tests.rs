@@ -47,7 +47,8 @@ fn detects_gradients() {
 
 #[test]
 fn single_color_is_tintable() {
-    let body = "<path d=\"M2 2 L10 2 Z\" fill=\"#000000\"/><path d=\"M12 12 L20 20 Z\" fill=\"#000000\"/>";
+    let body =
+        "<path d=\"M2 2 L10 2 Z\" fill=\"#000000\"/><path d=\"M12 12 L20 20 Z\" fill=\"#000000\"/>";
     let bytes = wrap(body);
     let a = analyze_vector(&bytes).expect("should analyze");
     assert!(a.single_color_tintable);
@@ -56,7 +57,8 @@ fn single_color_is_tintable() {
 
 #[test]
 fn multi_color_is_not_tintable() {
-    let body = "<path d=\"M2 2 L10 2 Z\" fill=\"#FF0000\"/><path d=\"M12 12 L20 20 Z\" fill=\"#00FF00\"/>";
+    let body =
+        "<path d=\"M2 2 L10 2 Z\" fill=\"#FF0000\"/><path d=\"M12 12 L20 20 Z\" fill=\"#00FF00\"/>";
     let bytes = wrap(body);
     let a = analyze_vector(&bytes).expect("should analyze");
     assert!(!a.single_color_tintable);
@@ -65,7 +67,8 @@ fn multi_color_is_not_tintable() {
 
 #[test]
 fn detects_strokes() {
-    let bytes = wrap("<path d=\"M2 2 L22 22\" fill=\"none\" stroke=\"#000000\" stroke-width=\"2\"/>");
+    let bytes =
+        wrap("<path d=\"M2 2 L22 22\" fill=\"none\" stroke=\"#000000\" stroke-width=\"2\"/>");
     let a = analyze_vector(&bytes).expect("should analyze");
     assert!(a.uses_strokes);
 }

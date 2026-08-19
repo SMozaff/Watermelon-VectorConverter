@@ -90,7 +90,13 @@ fn detect_svg(root: &roxmltree::Node) -> AnimationKind {
     AnimationKind::None
 }
 
-const SMIL_TAGS: &[&str] = &["animate", "animateTransform", "animateMotion", "animateColor", "set"];
+const SMIL_TAGS: &[&str] = &[
+    "animate",
+    "animateTransform",
+    "animateMotion",
+    "animateColor",
+    "set",
+];
 
 fn has_smil_descendant(root: &roxmltree::Node) -> bool {
     root.descendants()
@@ -106,7 +112,7 @@ fn has_css_keyframes(root: &roxmltree::Node) -> bool {
     root.descendants().any(|n| {
         n.is_element()
             && n.tag_name().name() == "style"
-            && n.text().map_or(false, |t| t.contains("@keyframes"))
+            && n.text().is_some_and(|t| t.contains("@keyframes"))
     })
 }
 

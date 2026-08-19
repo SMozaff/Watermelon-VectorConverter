@@ -35,27 +35,3 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
     .theme(iced::Theme::Dark)
     .run()
 }
-
-/// What kind of animated content a file turned out to be, mirrored here
-/// from svg_converter_core::animation::AnimationKind so the UI layer
-/// doesn't need to depend on the core crate's internal module path in
-/// every match arm — kept in exact 1:1 correspondence with the real enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AnimKind {
-    None,
-    Avd,
-    SvgSmil,
-    SvgCss,
-}
-
-impl From<svg_converter_core::animation::AnimationKind> for AnimKind {
-    fn from(k: svg_converter_core::animation::AnimationKind) -> Self {
-        use svg_converter_core::animation::AnimationKind as K;
-        match k {
-            K::None => AnimKind::None,
-            K::Avd => AnimKind::Avd,
-            K::SvgSmil => AnimKind::SvgSmil,
-            K::SvgCss => AnimKind::SvgCss,
-        }
-    }
-}

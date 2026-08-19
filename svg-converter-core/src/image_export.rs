@@ -48,8 +48,8 @@ fn render_svg_string(svg: &str, px: u32) -> Result<Vec<u8>, ConversionError> {
     };
 
     let opt = usvg::Options::default();
-    let tree = usvg::Tree::from_str(svg, &opt)
-        .map_err(|e| ConversionError::RenderError(e.to_string()))?;
+    let tree =
+        usvg::Tree::from_str(svg, &opt).map_err(|e| ConversionError::RenderError(e.to_string()))?;
 
     let mut pixmap = tiny_skia::Pixmap::new(px, px)
         .ok_or_else(|| ConversionError::RenderError("pixmap alloc failed".into()))?;
