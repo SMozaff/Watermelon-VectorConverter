@@ -80,7 +80,7 @@ jobs:
       - name: Build MSI installer
         if: matrix.os == 'windows-latest'
         working-directory: desktop
-        run: cargo wix --target ${{ matrix.target }} --nocapture
+        run: cargo wix --package wvgc-desktop --target ${{ matrix.target }} --nocapture
 
       - name: Rename MSI
         if: matrix.os == 'windows-latest'
