@@ -59,9 +59,9 @@ jobs:
           VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' desktop/Cargo.toml | head -n 1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build release binary
+      - name: Build release binaries
         working-directory: desktop
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --package wvgc-desktop --package wvgc-cli
 
       # ── Windows: real .msi via cargo-wix (WiX Toolset) ──────────────────
       - name: Install cargo-wix
@@ -80,6 +80,8 @@ jobs:
       - name: Build MSI installer
         if: matrix.os == 'windows-latest'
         working-directory: desktop
+        env:
+          WATERMELON_ICON_ICO: ${{ github.workspace }}\icons\watermelon.ico
         run: cargo wix --package wvgc-desktop --target ${{ matrix.target }} --nocapture
 
       - name: Rename MSI
