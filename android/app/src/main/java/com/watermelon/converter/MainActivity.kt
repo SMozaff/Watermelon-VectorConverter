@@ -12,6 +12,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -37,8 +39,13 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
             WatermelonTheme(darkTheme = dark) {
+                val showSplash = rememberSaveable { mutableStateOf(true) }
                 Surface(modifier = Modifier) {
-                    AppNavHost(settingsVm)
+                    if (showSplash.value) {
+                        WatermelonSplash(onFinished = { showSplash.value = false })
+                    } else {
+                        AppNavHost(settingsVm)
+                    }
                 }
             }
         }

@@ -66,4 +66,5 @@ priority = "optional"
 assets = [
     ["target/release/wvgc-desktop", "usr/bin/", "755"],
     ["assets/watermelon-vector-converter.desktop", "usr/share/applications/", "644"],
+    ["assets/icons/hicolor/512x512/apps/watermelon-vector-converter.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
 ]

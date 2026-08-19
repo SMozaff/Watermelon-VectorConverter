@@ -15,6 +15,9 @@ pub fn run_converter() -> iced::Result {
     .title("Watermelon Vector Converter")
     .subscription(converter::Converter::subscription)
     .theme(iced::Theme::Dark)
+    .window_size((460.0, 640.0))
+    .centered()
+    .resizable(false)
     .run()
 }
 
