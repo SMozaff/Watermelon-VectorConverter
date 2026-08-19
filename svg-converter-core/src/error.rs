@@ -15,6 +15,7 @@ pub enum ConversionError {
     IoError(String),            // 1005
     RenderError(String),        // 1006
     Cancelled,                  // 1007
+    InputLimit(String),         // 1008
     Internal(String),           // 1099
 }
 
@@ -29,6 +30,7 @@ impl ConversionError {
             ConversionError::IoError(_) => 1005,
             ConversionError::RenderError(_) => 1006,
             ConversionError::Cancelled => 1007,
+            ConversionError::InputLimit(_) => 1008,
             ConversionError::Internal(_) => 1099,
         }
     }
@@ -44,6 +46,7 @@ impl fmt::Display for ConversionError {
             ConversionError::IoError(s) => format!("io error: {s}"),
             ConversionError::RenderError(s) => format!("render error: {s}"),
             ConversionError::Cancelled => "cancelled".to_string(),
+            ConversionError::InputLimit(s) => format!("input limit exceeded: {s}"),
             ConversionError::Internal(s) => format!("internal error: {s}"),
         };
         write!(f, "[{}] {}", self.code(), msg)

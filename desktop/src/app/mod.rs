@@ -14,7 +14,7 @@ pub fn run_converter() -> iced::Result {
     )
     .title("Watermelon Vector Converter")
     .subscription(converter::Converter::subscription)
-    .theme(|_state| iced::Theme::Dark)
+    .theme(iced::Theme::Dark)
     .run()
 }
 
@@ -29,7 +29,7 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
     )
     .title("Watermelon Vector Viewer")
     .subscription(viewer::Viewer::subscription)
-    .theme(|_state| iced::Theme::Dark)
+    .theme(iced::Theme::Dark)
     .run()
 }
 

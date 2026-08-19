@@ -21,6 +21,7 @@ pub mod gradients;
 pub mod vector_drawable;
 pub mod utils;
 pub mod image_export;
+pub mod limits;
 pub mod batch_processor;
 pub mod analysis;
 pub mod vd_models;
