@@ -37,6 +37,10 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 
+# build.rs embeds the packaged Windows launcher icon into the executable.
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
 # core-foundation is a mature, complete crate used only for safe CFString
 # construction/lifetime management. LSSetDefaultRoleHandlerForContentType
 # itself is called via a direct, hand-written extern "C" FFI declaration

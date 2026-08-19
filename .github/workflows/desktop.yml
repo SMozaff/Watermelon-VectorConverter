@@ -28,8 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Cargo honors rust-toolchain.toml (1.97.1), so install each matrix
+      # target into that exact toolchain rather than an unrelated stable one.
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
 
