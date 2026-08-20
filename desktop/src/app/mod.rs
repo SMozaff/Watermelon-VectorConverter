@@ -14,7 +14,7 @@ pub fn run_converter() -> iced::Result {
     )
     .title("Watermelon Vector Converter")
     .subscription(converter::Converter::subscription)
-    .theme(iced::Theme::Dark)
+    .theme(converter::Converter::theme)
     .window_size((1040.0, 760.0))
     .centered()
     .resizable(true)
@@ -32,6 +32,6 @@ pub fn run_viewer(path: PathBuf) -> iced::Result {
     )
     .title("Watermelon Vector Viewer")
     .subscription(viewer::Viewer::subscription)
-    .theme(iced::Theme::Dark)
+    .theme(|_: &viewer::Viewer| -> Option<iced::Theme> { None })
     .run()
 }

@@ -14,8 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.watermelon.converter.data.model.BatchReport
-import com.watermelon.converter.ui.theme.FreshTeal
-import com.watermelon.converter.ui.theme.WatermelonRed
 
 /**
  * Inline post-conversion report. Shown on whatever screen triggered the
@@ -51,7 +49,7 @@ fun ReportPanel(
                 Text(
                     "Rejected (${report.rejected.size})",
                     style = MaterialTheme.typography.titleLarge,
-                    color = WatermelonRed,
+                    color = MaterialTheme.colorScheme.error,
                 )
                 report.rejected.forEach { f ->
                     Spacer(Modifier.height(4.dp))
@@ -62,17 +60,17 @@ fun ReportPanel(
                             append(f.errorMessage ?: "unknown reason")
                         },
                         style = MaterialTheme.typography.labelLarge,
-                        color = WatermelonRed,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             } else {
                 Spacer(Modifier.height(12.dp))
-                Text("All files converted successfully.", color = FreshTeal)
+                Text("All files converted successfully.", color = MaterialTheme.colorScheme.primary)
             }
 
             if (saveState != null) {
                 Spacer(Modifier.height(8.dp))
-                Text(saveState, style = MaterialTheme.typography.labelLarge, color = FreshTeal)
+                Text(saveState, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
 
             Spacer(Modifier.height(16.dp))
@@ -92,7 +90,7 @@ fun ReportPanel(
 @Composable
 private fun StatRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(label, modifier = Modifier.weight(1f), color = FreshTeal)
+        Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
         Text(value, fontWeight = FontWeight.SemiBold)
     }
 }

@@ -3,130 +3,104 @@
 
 package com.watermelon.converter
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-private val SplashBackground = Color(0xFF050C09)
-private val SplashRind = Color(0xFF40C556)
-private val SplashGlow = Color(0xFF8AEB4E)
-private val SplashMuted = Color(0xFF71DA7A)
+private const val SPLASH_DURATION_MS = 1500L
 
 /**
- * A short branded launch treatment. The staged progress is deliberately
- * simulated so the first frame is polished while the app initializes.
+ * Presents the supplied Watermelon launch artwork as a brief product-identity
+ * moment. The image itself already contains the product lockup and launch bar,
+ * so the native animation intentionally adds only an entrance and ambient glow.
  */
 @Composable
 fun WatermelonSplash(onFinished: () -> Unit) {
-    val targetProgress = remember { mutableFloatStateOf(0f) }
-    val progress by animateFloatAsState(
-        targetValue = targetProgress.floatValue,
-        animationSpec = tween(durationMillis = 90),
-        label = "splash_progress",
+    val revealed = remember { mutableStateOf(false) }
+    val alpha by animateFloatAsState(
+        targetValue = if (revealed.value) 1f else 0f,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "launch_art_alpha",
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (revealed.value) 1f else 0.91f,
+        animationSpec = tween(durationMillis = 720, easing = FastOutSlowInEasing),
+        label = "launch_art_scale",
+    )
+    val ambient = rememberInfiniteTransition(label = "launch_ambient")
+    val glowAlpha by ambient.animateFloat(
+        initialValue = 0.12f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "launch_glow_alpha",
     )
 
     LaunchedEffect(Unit) {
-        repeat(25) { step ->
-            targetProgress.floatValue = (step + 1) * 4f
-            delay(90)
-        }
+        revealed.value = true
+        delay(SPLASH_DURATION_MS)
         onFinished()
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(SplashBackground)
-            .padding(horizontal = 36.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = "↑",
-            color = SplashGlow,
-            fontSize = 64.sp,
-            fontWeight = FontWeight.Black,
-            lineHeight = 64.sp,
-        )
-        Text(
-            text = "▪  ▪  ▪",
-            color = SplashMuted,
-            fontSize = 14.sp,
-            letterSpacing = 4.sp,
-        )
-        Spacer(Modifier.height(8.dp))
-        Image(
-            painter = painterResource(R.drawable.watermelon_splash),
-            contentDescription = "Watermelon conversion illustration",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.size(208.dp),
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "WATERMELON",
-            color = Color.White,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = 3.sp,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = "VECTOR CONVERTER",
-            color = SplashRind,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 3.sp,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(46.dp))
-        Text(
-            text = if (progress >= 96f) "READY" else "LAUNCHING…",
-            color = SplashMuted,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 4.sp,
-        )
-        Spacer(Modifier.height(12.dp))
-        LinearProgressIndicator(
-            progress = { progress / 100f },
+        Box(
             modifier = Modifier
-                .width(280.dp)
-                .height(10.dp),
-            color = SplashGlow,
-            trackColor = Color(0xFF0C2316),
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x4A49FF63).copy(alpha = glowAlpha),
+                            Color.Transparent,
+                        ),
+                        radius = 920f,
+                    ),
+                ),
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "${progress.toInt()}%",
-            color = SplashRind,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+        Image(
+            painter = painterResource(R.drawable.watermelon_launch_art),
+            contentDescription = "Watermelon Vector Converter launching",
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .aspectRatio(1f)
+                .padding(8.dp)
+                .graphicsLayer(
+                    alpha = alpha,
+                    scaleX = scale,
+                    scaleY = scale,
+                ),
+            contentScale = ContentScale.Fit,
         )
     }
 }

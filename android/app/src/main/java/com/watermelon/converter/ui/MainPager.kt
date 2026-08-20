@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -40,9 +41,6 @@ import androidx.navigation.NavController
 import com.watermelon.converter.ui.screens.FilesScreen
 import com.watermelon.converter.ui.screens.HomeScreen
 import com.watermelon.converter.ui.screens.SettingsScreen
-import com.watermelon.converter.ui.theme.DeepNavy
-import com.watermelon.converter.ui.theme.FreshTeal
-import com.watermelon.converter.ui.theme.PureWhite
 import com.watermelon.converter.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
@@ -86,7 +84,7 @@ fun MainPager(nav: NavController, settingsVm: SettingsViewModel) {
         snackbarHost = { SnackbarHost(snackbarHost) },
         bottomBar = {
             NavigationBar(
-                containerColor = DeepNavy,
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 TABS.forEachIndexed { index, tab ->
                     val selected = pagerState.currentPage == index
@@ -112,11 +110,11 @@ fun MainPager(nav: NavController, settingsVm: SettingsViewModel) {
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = FreshTeal,
-                            selectedTextColor = FreshTeal,
-                            unselectedIconColor = PureWhite.copy(alpha = 0.6f),
-                            unselectedTextColor = PureWhite.copy(alpha = 0.6f),
-                            indicatorColor = DeepNavy,  // no pill highlight — active color alone signals state
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                         ),
                     )
                 }

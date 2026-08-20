@@ -76,7 +76,7 @@ fun ExportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Export", fontWeight = FontWeight.SemiBold, color = DeepNavy) },
+                title = { Text("Export", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
@@ -94,14 +94,14 @@ fun ExportScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (!hasAny) {
-                Text("Nothing to export.", color = SlateGray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text("Nothing to export.", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             } else if (exportDone) {
-                Text("✓  Exported successfully.", color = FreshTeal, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("✓  Exported successfully.", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 Spacer(Modifier.height(8.dp))
                 if (hasDestination) {
                     Text(
                         "Saved to: ${OutputDestination.displayLabel(ctx, settings.outputDestinationUri)}",
-                        color = SlateGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                     )
                 }
@@ -124,7 +124,7 @@ fun ExportScreen(
                     // Settings destination configured — export directly, no picker.
                     Text(
                         "Will save to:\n${OutputDestination.displayLabel(ctx, settings.outputDestinationUri)}",
-                        color = SlateGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
@@ -139,12 +139,13 @@ fun ExportScreen(
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = FreshTeal),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary),
                     ) {
                         Text("Export", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     TextButton(onClick = { treePicker.launch(null) }) {
-                        Text("Choose a different folder…", color = SlateGray, fontSize = 13.sp)
+                        Text("Choose a different folder…", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     }
                 } else {
                     // No Settings destination — use the folder picker.
@@ -152,13 +153,14 @@ fun ExportScreen(
                         onClick = { treePicker.launch(null) },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = FreshTeal),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary),
                     ) {
                         Text("Choose destination folder", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                     Text(
                         "Tip: set a default destination in Settings to skip this step.",
-                        color = SlateGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )

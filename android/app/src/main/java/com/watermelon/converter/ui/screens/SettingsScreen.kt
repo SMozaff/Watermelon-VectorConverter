@@ -21,10 +21,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.watermelon.converter.logging.AppLogger
-import com.watermelon.converter.ui.theme.DeepNavy
-import com.watermelon.converter.ui.theme.FreshTeal
-import com.watermelon.converter.ui.theme.SlateGray
-import com.watermelon.converter.ui.theme.WatermelonRed
 import com.watermelon.converter.util.OutputDestination
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -85,19 +81,19 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
             Text(
                 "All converted files are saved here. Tap to change.",
                 style = MaterialTheme.typography.labelLarge,
-                color = SlateGray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 OutputDestination.displayLabel(ctx, settings.outputDestinationUri),
                 style = MaterialTheme.typography.bodyMedium,
-                color = FreshTeal,
+                color = MaterialTheme.colorScheme.primary,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { destPicker.launch(null) }) { Text("Change folder") }
                 if (settings.outputDestinationUri != null) {
                     OutlinedButton(onClick = { vm.clearOutputDestination() }) {
-                        Text("Reset to default", color = WatermelonRed)
+                        Text("Reset to default", color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -128,7 +124,7 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                     Text(
                         "Displays name, size, dimensions and structure below the preview image.",
                         style = MaterialTheme.typography.labelLarge,
-                        color = SlateGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Switch(
@@ -164,14 +160,14 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("History", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = DeepNavy)
+                    Text("History", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         "Past conversions, successes and errors",
                         style = MaterialTheme.typography.labelLarge,
-                        color = SlateGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text("›", fontSize = 20.sp, color = SlateGray)
+                Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             HorizontalDivider()
@@ -185,14 +181,14 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("About", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = DeepNavy)
+                    Text("About", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         "Developer info, version, license",
                         style = MaterialTheme.typography.labelLarge,
-                        color = SlateGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text("›", fontSize = 20.sp, color = SlateGray)
+                Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
