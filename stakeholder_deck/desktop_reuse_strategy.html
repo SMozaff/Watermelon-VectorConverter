@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .slide-container {
+            width: 1280px;
+            min-height: 720px;
+            background: #D8F3DC;
+            font-family: 'Roboto Slab', serif, system-ui;
+            color: #343A40;
+        }
+        .header {
+            padding-top: 40px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .eyebrow {
+            font-size: 14px;
+            font-weight: 700;
+            color: #D90429;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .title {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #001D3D;
+        }
+        .content-box {
+            padding-top: 30px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #FFFFFF;
+            border-left: 6px solid #001D3D;
+        }
+        .th {
+            background: #001D3D;
+            color: #D8F3DC;
+            text-align: left;
+            padding-top: 14px;
+            padding-left: 20px;
+            padding-right: 20px;
+            font-family: 'Impact', sans-serif;
+            font-size: 17px;
+            letter-spacing: 0.5px;
+        }
+        .tr {
+            border-bottom: 1px solid #E5E7EB;
+        }
+        .td {
+            padding-top: 14px;
+            padding-left: 20px;
+            padding-right: 20px;
+            font-size: 15px;
+            vertical-align: top;
+            line-height: 1.4;
+        }
+        .td-cap {
+            font-weight: 700;
+            color: #001D3D;
+            width: 320px;
+        }
+        .code-tag {
+            font-family: monospace;
+            font-size: 13px;
+            background: #E8F5E9;
+            color: #1B4332;
+            padding: 2px 6px;
+        }
+        .banner {
+            margin-top: 24px;
+            background: #FFFFFF;
+            border-left: 6px solid #D90429;
+            padding-top: 14px;
+            padding-left: 20px;
+            padding-right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 15px;
+            color: #001D3D;
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+        <div class="header">
+            <div class="eyebrow">Architecture Reuse</div>
+            <h1 class="title">Desktop Delivery Reuses Proven Capabilities</h1>
+        </div>
+        <div class="content-box">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="th" style="width: 320px;">Existing Engine Layer</th>
+                        <th class="th">Desktop Implementation Application</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="tr">
+                        <td class="td td-cap"><i class="fa-solid fa-gears" style="color: #2D6A4F; margin-right: 8px;"></i> Rust Core Conversion APIs</td>
+                        <td class="td">Directly call <span class="code-tag">convert_svg(&amp;bytes)</span> and <span class="code-tag">convert_vd(&amp;xml)</span> in asynchronous background tasks.</td>
+                    </tr>
+                    <tr class="tr">
+                        <td class="td td-cap"><i class="fa-solid fa-window-restore" style="color: #001D3D; margin-right: 8px;"></i> Native Viewer Event Architecture</td>
+                        <td class="td">Reuse proven <span class="code-tag">rfd::AsyncFileDialog</span>, window drop listeners, and Iced event subscriptions.</td>
+                    </tr>
+                    <tr class="tr">
+                        <td class="td td-cap"><i class="fa-solid fa-image" style="color: #D90429; margin-right: 8px;"></i> resvg Preview Pipeline</td>
+                        <td class="td">Reuse <span class="code-tag">image_export::render_*_preview</span> for side-by-side rendering; render failures degrade gracefully without blocking text output.</td>
+                    </tr>
+                    <tr class="tr">
+                        <td class="td td-cap"><i class="fa-solid fa-shield-halved" style="color: #1B4332; margin-right: 8px;"></i> Conversion Error Taxonomy</td>
+                        <td class="td">Translate <span class="code-tag">ConversionError</span> variants into structured error cards with clear recovery actions.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="banner">
+                <i class="fa-solid fa-lock" style="color: #D90429; font-size: 20px;"></i>
+                <div><strong>Critical Architectural Invariant:</strong> Graphic preview generation failures must never invalidate or prevent saving a successful text-based vector conversion.</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

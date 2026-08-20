@@ -1,0 +1,123 @@
+{
+  "project_info": {
+    "title": "Release Blockers: Implementation Plan",
+    "created": 1787194363.126,
+    "last_updated": 1787194453.39,
+    "total_slides": 11
+  },
+  "slides": [
+    {
+      "id": "cover",
+      "state": "edited",
+      "pageNum": 1
+    },
+    {
+      "id": "problem_statement",
+      "state": "edited",
+      "pageNum": 2
+    },
+    {
+      "id": "scope_boundaries",
+      "state": "edited",
+      "pageNum": 3
+    },
+    {
+      "id": "definition_of_done",
+      "state": "edited",
+      "pageNum": 4
+    },
+    {
+      "id": "desktop_workspace_architecture",
+      "state": "edited",
+      "pageNum": 5
+    },
+    {
+      "id": "desktop_reuse_strategy",
+      "state": "edited",
+      "pageNum": 6
+    },
+    {
+      "id": "android_state_contract",
+      "state": "edited",
+      "pageNum": 7
+    },
+    {
+      "id": "android_implementation_approach",
+      "state": "edited",
+      "pageNum": 8
+    },
+    {
+      "id": "delivery_increments",
+      "state": "edited",
+      "pageNum": 9
+    },
+    {
+      "id": "validation_and_release_gates",
+      "state": "edited",
+      "pageNum": 10
+    },
+    {
+      "id": "decision_requested",
+      "state": "edited",
+      "pageNum": 11
+    }
+  ],
+  "outline": [
+    {
+      "id": "cover",
+      "title": "Release Blockers: Implementation Plan",
+      "summary": "Title slide framing the stakeholder review of the desktop converter and Android state feedback release blockers.",
+      "image_plan": "/home/ubuntu/Watermelon-VectorConverter/android/app/src/main/res/drawable/watermelon_splash.png - App icon / product logo for Watermelon Vector Converter fits the Cover slide."
+    },
+    {
+      "id": "problem_statement",
+      "title": "Two usability defects block release",
+      "summary": "Overview of the critical desktop placeholder defect and Android missing working/error state handling."
+    },
+    {
+      "id": "scope_boundaries",
+      "title": "The release scope is deliberately narrow",
+      "summary": "Comparison of the immediate release-scope items versus intentionally deferred backlog work."
+    },
+    {
+      "id": "definition_of_done",
+      "title": "Definition of done is user-observable",
+      "summary": "Clear user-observable criteria for desktop and Android completion before release."
+    },
+    {
+      "id": "desktop_workspace_architecture",
+      "title": "Desktop becomes a real conversion workspace",
+      "summary": "Five-step structural transformation of the desktop app from splash placeholder to working converter."
+    },
+    {
+      "id": "desktop_reuse_strategy",
+      "title": "Desktop delivery reuses proven capabilities",
+      "summary": "Mapping existing core Rust APIs, viewer patterns, and rendering pipelines into the converter workspace."
+    },
+    {
+      "id": "android_state_contract",
+      "title": "Android receives an explicit conversion-state contract",
+      "summary": "State table covering Idle, Working, Error, and Done with user expectations and valid actions."
+    },
+    {
+      "id": "android_implementation_approach",
+      "title": "Android changes remain low-risk and localized",
+      "summary": "Low-risk engineering strategy for view-model enrichment, active-direction resolution, and action visibility."
+    },
+    {
+      "id": "delivery_increments",
+      "title": "Delivery proceeds in three controlled increments",
+      "summary": "Three phased increments from desktop foundation to core journeys and release-candidate validation."
+    },
+    {
+      "id": "validation_and_release_gates",
+      "title": "Release gates protect against regression",
+      "summary": "Testing, accessibility, manual scenario matrix, and CI workflow requirements for release approval."
+    },
+    {
+      "id": "decision_requested",
+      "title": "Stakeholder decision requested",
+      "summary": "Actionable stakeholder approval request for the bounded P0 scope and implementation sequence."
+    }
+  ]
+}

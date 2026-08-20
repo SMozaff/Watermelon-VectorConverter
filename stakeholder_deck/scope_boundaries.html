@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .slide-container {
+            width: 1280px;
+            min-height: 720px;
+            background: #D8F3DC;
+            font-family: 'Roboto Slab', serif, system-ui;
+            color: #343A40;
+        }
+        .header {
+            padding-top: 45px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .eyebrow {
+            font-size: 14px;
+            font-weight: 700;
+            color: #D90429;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .title {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #001D3D;
+        }
+        .table-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 36px;
+            padding-top: 35px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .col-card {
+            background: #FFFFFF;
+            padding-top: 24px;
+            padding-left: 28px;
+            padding-right: 28px;
+            min-height: 400px;
+        }
+        .included {
+            border-left: 6px solid #2D6A4F;
+        }
+        .deferred {
+            border-left: 6px solid #D90429;
+        }
+        .col-title {
+            font-family: 'Impact', sans-serif;
+            font-size: 22px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .col-title.inc { color: #2D6A4F; }
+        .col-title.def { color: #D90429; }
+        .item {
+            display: flex;
+            gap: 12px;
+            font-size: 15px;
+            line-height: 1.45;
+            margin-bottom: 16px;
+            color: #212529;
+        }
+        .item i {
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        .banner {
+            margin-top: 25px;
+            margin-left: 80px;
+            margin-right: 80px;
+            background: #001D3D;
+            color: #D8F3DC;
+            padding-top: 14px;
+            padding-left: 24px;
+            padding-right: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+        <div class="header">
+            <div class="eyebrow">Scope Discipline</div>
+            <h1 class="title">The Release Scope Is Deliberately Narrow</h1>
+        </div>
+        <div class="table-container">
+            <div class="col-card included">
+                <div class="col-title inc"><i class="fa-solid fa-circle-check"></i> Included in Immediate P0 Scope</div>
+                <div class="item"><i class="fa-solid fa-check" style="color: #2D6A4F;"></i> <div><strong>Single-File Conversion:</strong> Complete bidirectional conversion for SVG ↔ Android VectorDrawable XML.</div></div>
+                <div class="item"><i class="fa-solid fa-check" style="color: #2D6A4F;"></i> <div><strong>Desktop Workspace:</strong> File picker, drag-and-drop, inline conversion, side-by-side previews, Copy, and Save As.</div></div>
+                <div class="item"><i class="fa-solid fa-check" style="color: #2D6A4F;"></i> <div><strong>Android State Feedback:</strong> Explicit Working, Done, Error, and Idle screens with retry & recovery actions.</div></div>
+                <div class="item"><i class="fa-solid fa-check" style="color: #2D6A4F;"></i> <div><strong>Safety & Contrast Basics:</strong> Stale action shielding and readable state notifications.</div></div>
+            </div>
+            <div class="col-card deferred">
+                <div class="col-title def"><i class="fa-solid fa-circle-xmark"></i> Explicitly Deferred to Post-Release</div>
+                <div class="item"><i class="fa-solid fa-xmark" style="color: #D90429;"></i> <div><strong>Batch ZIP Redesign:</strong> Multi-archive overhaul and complex batch queues.</div></div>
+                <div class="item"><i class="fa-solid fa-xmark" style="color: #D90429;"></i> <div><strong>Advanced Editing Tools:</strong> In-app node/path manipulation and design canvas tools.</div></div>
+                <div class="item"><i class="fa-solid fa-xmark" style="color: #D90429;"></i> <div><strong>Code Editor Enhancements:</strong> Monospaced syntax highlighting and diff analyzers.</div></div>
+                <div class="item"><i class="fa-solid fa-xmark" style="color: #D90429;"></i> <div><strong>Background Execution:</strong> True OS-level background notifications and cancellation hooks.</div></div>
+            </div>
+        </div>
+        <div class="banner">
+            <i class="fa-solid fa-lightbulb" style="color: #D90429;"></i>
+            <span><strong>Core Principle:</strong> Complete the essential user journey end-to-end before expanding secondary feature complexity.</span>
+        </div>
+    </div>
+</body>
+</html>

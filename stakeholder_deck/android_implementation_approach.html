@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .slide-container {
+            width: 1280px;
+            min-height: 720px;
+            background: #D8F3DC;
+            font-family: 'Roboto Slab', serif, system-ui;
+            color: #343A40;
+        }
+        .header {
+            padding-top: 45px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .eyebrow {
+            font-size: 14px;
+            font-weight: 700;
+            color: #D90429;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .title {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #001D3D;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 28px;
+            padding-top: 35px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .card {
+            background: #FFFFFF;
+            padding-top: 22px;
+            padding-left: 24px;
+            padding-right: 24px;
+            border-left: 6px solid #001D3D;
+            min-height: 185px;
+        }
+        .card.accent {
+            border-left-color: #D90429;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: 'Impact', sans-serif;
+            font-size: 20px;
+            color: #001D3D;
+            margin-bottom: 10px;
+        }
+        .card-desc {
+            font-size: 15px;
+            line-height: 1.45;
+            color: #343A40;
+        }
+        .code-pill {
+            display: inline-block;
+            font-family: monospace;
+            background: #EDF6F9;
+            color: #1D3557;
+            font-size: 13px;
+            padding-top: 2px;
+            padding-left: 6px;
+            padding-right: 6px;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+        .banner {
+            margin-top: 28px;
+            margin-left: 80px;
+            margin-right: 80px;
+            background: #001D3D;
+            color: #D8F3DC;
+            padding-top: 14px;
+            padding-left: 24px;
+            padding-right: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+        <div class="header">
+            <div class="eyebrow">Engineering Strategy</div>
+            <h1 class="title">Android Changes Remain Low-Risk and Localized</h1>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <div class="card-header"><i class="fa-solid fa-code" style="color: #001D3D;"></i> 1. State Model Enrichment</div>
+                <p class="card-desc">Upgrade <code>ConvertUiState</code> to include source filename and a cached source <code>Uri</code>. Add a safe <code>retry()</code> method without changing the underlying native conversion call.</p>
+                <div class="code-pill">Working(sourceName) | Error(sourceName, msg, hasUri)</div>
+            </div>
+            <div class="card accent">
+                <div class="card-header"><i class="fa-solid fa-route" style="color: #D90429;"></i> 2. Immediate SingleTop Navigation</div>
+                <p class="card-desc">Retain immediate navigation from Home to Preview for minimal architectural churn, adding <code>launchSingleTop = true</code> to prevent duplicate back-stack entries during rapid selection.</p>
+                <div class="code-pill">Preview route rendered immediately for all states</div>
+            </div>
+            <div class="card accent">
+                <div class="card-header"><i class="fa-solid fa-arrows-split-up-and-left" style="color: #D90429;"></i> 3. Pure Active-State Resolver</div>
+                <p class="card-desc">Introduce a small pure function resolving the active state between forward and reverse view models, prioritizing non-idle jobs and enabling deterministic unit testing.</p>
+                <div class="code-pill">resolveActiveState(forwardState, reverseState)</div>
+            </div>
+            <div class="card">
+                <div class="card-header"><i class="fa-solid fa-shield-halved" style="color: #001D3D;"></i> 4. Strict Action Shielding</div>
+                <p class="card-desc">Hide <code>Copy</code>, <code>Share</code>, and <code>Export</code> actions in the top/bottom bars whenever the state is not <code>Done</code>, eliminating accidental export of stale previous results.</p>
+                <div class="code-pill">Actions visible strictly when state is Done</div>
+            </div>
+        </div>
+        <div class="banner">
+            <i class="fa-solid fa-check-double" style="color: #D90429;"></i>
+            <span><strong>Zero Core Mutation:</strong> JNI bindings, JNI exception mapping, and file system repositories remain completely untouched.</span>
+        </div>
+    </div>
+</body>
+</html>

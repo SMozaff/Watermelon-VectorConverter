@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        .slide-container {
+            width: 1280px;
+            min-height: 720px;
+            background: #D8F3DC;
+            font-family: 'Roboto Slab', serif, system-ui;
+            color: #343A40;
+        }
+        .header {
+            padding-top: 40px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .eyebrow {
+            font-size: 14px;
+            font-weight: 700;
+            color: #D90429;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .title {
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            font-size: 38px;
+            color: #001D3D;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding-top: 25px;
+            padding-left: 80px;
+            padding-right: 80px;
+        }
+        .card {
+            background: #FFFFFF;
+            padding-top: 18px;
+            padding-left: 20px;
+            padding-right: 20px;
+            border-left: 6px solid #001D3D;
+            min-height: 195px;
+        }
+        .card.accent {
+            border-left-color: #D90429;
+        }
+        .card.green {
+            border-left-color: #2D6A4F;
+        }
+        .card-title {
+            font-family: 'Impact', sans-serif;
+            font-size: 18px;
+            color: #001D3D;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .list-item {
+            font-size: 13.5px;
+            line-height: 1.4;
+            color: #212529;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .list-item i {
+            margin-top: 3px;
+            font-size: 11px;
+            color: #001D3D;
+        }
+        .banner {
+            margin-top: 20px;
+            margin-left: 80px;
+            margin-right: 80px;
+            background: #001D3D;
+            color: #D8F3DC;
+            padding-top: 12px;
+            padding-left: 20px;
+            padding-right: 20px;
+            font-size: 13.5px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+        <div class="header">
+            <div class="eyebrow">Quality & Release Governance</div>
+            <h1 class="title">Release Gates Protect Against Regression</h1>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-desktop" style="color: #001D3D;"></i> 1. Desktop Scenario Matrix</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Valid SVG → VectorDrawable XML conversion, preview, and Save As.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Reverse VectorDrawable → SVG conversion, preview, and Copy.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Malformed input handling and preview degradation safety.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Window responsiveness and resize tolerance down to 800x600.</div>
+            </div>
+            <div class="card accent">
+                <div class="card-title"><i class="fa-solid fa-mobile-screen" style="color: #D90429;"></i> 2. Android Journey Validation</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Explicit rendering of Idle, Working, Error, and Done states.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> One-tap Retry execution using preserved session URI.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Copy, Share, and Export controls strictly gated behind Done.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Zero duplicate back-stack entries on rapid file selection.</div>
+            </div>
+            <div class="card green">
+                <div class="card-title"><i class="fa-solid fa-universal-access" style="color: #2D6A4F;"></i> 3. Accessibility & Theme Baseline</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Screen reader accessibility labels on state banners and error messages.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Dynamic font-scale validation at 130% and 200% without text clipping.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Light and dark theme contrast compliance on all action surfaces.</div>
+            </div>
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-code-commit" style="color: #001D3D;"></i> 4. Automated CI Pipeline Gates</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> <code style="font-family: monospace;">cargo fmt --check</code> & <code style="font-family: monospace;">cargo clippy -D warnings</code>.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> Rust workspace test suite and Android instrumentation tests.</div>
+                <div class="list-item"><i class="fa-solid fa-circle-check"></i> All 4 GitHub Actions workflows green across all target platforms.</div>
+            </div>
+        </div>
+        <div class="banner">
+            <i class="fa-solid fa-traffic-light" style="color: #D90429;"></i>
+            <span><strong>Release Go/No-Go Rule:</strong> Production release requires 100% pass across all 4 gate dimensions with zero unresolved blockers.</span>
+        </div>
+    </div>
+</body>
+</html>
