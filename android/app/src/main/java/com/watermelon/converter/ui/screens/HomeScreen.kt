@@ -8,11 +8,11 @@ package com.watermelon.converter.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -20,102 +20,110 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.watermelon.converter.R
 import com.watermelon.converter.Routes
 import com.watermelon.converter.ui.sharedGraphViewModel
-import com.watermelon.converter.ui.theme.*
 import com.watermelon.converter.viewmodel.ConversionViewModel
 import com.watermelon.converter.viewmodel.ReverseConversionViewModel
 
-/**
- * Home / landing screen. "WE STAND WITH" banner + watermelon illustration
- * (both original assets, shrunk to fit), two conversion directions each with
- * Single/Batch beneath, and the About link at the bottom — all compact
- * enough to fit one screen without scrolling on a typical phone.
- */
+/** A task-first landing surface for single and batch vector conversion. */
 @Composable
 fun HomeScreen(
     nav: NavController,
     convVm: ConversionViewModel = nav.sharedGraphViewModel(),
     revConvVm: ReverseConversionViewModel = nav.sharedGraphViewModel(),
 ) {
+    val openPreview = remember(nav) {
+        {
+            nav.navigate(Routes.PREVIEW) {
+                launchSingleTop = true
+            }
+        }
+    }
     val svgPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
+            revConvVm.reset()
             convVm.convert(uri)
-            nav.navigate(Routes.PREVIEW)
+            openPreview()
         }
     }
     val xmlPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
+            convVm.reset()
             revConvVm.convert(uri)
-            nav.navigate(Routes.PREVIEW)
+            openPreview()
         }
     }
 
     Column(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top,
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // ── "WE STAND WITH" banner + illustration (shrunk to fit) ──────────
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.we_stand_with_watermelon),
+                contentDescription = "Watermelon Vector Converter",
+                modifier = Modifier.size(72.dp),
+                contentScale = ContentScale.Fit,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Watermelon",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Vector Converter",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "Offline SVG and Android VectorDrawable conversion",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Text(
-            text = "WE\nSTAND\nWITH",
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontWeight = FontWeight.Black,
-                fontSize = 22.sp,
-                lineHeight = 24.sp,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-            ),
-        )
-        Spacer(Modifier.height(4.dp))
-        Image(
-            painter = painterResource(id = R.drawable.we_stand_with_watermelon),
-            contentDescription = "Watermelon",
-            modifier = Modifier
-                .fillMaxWidth(0.45f)
-                .aspectRatio(1.6f),
-            contentScale = ContentScale.Fit,
+            "Choose a conversion",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 8.dp),
         )
 
-        Spacer(Modifier.height(12.dp))
-
-        // ── SVG -> XML ────────────────────────────────────────────────────
         ConversionOption(
-            title = "Convert SVG to XML",
-            subtitle = "Vector image \u2192 Android VectorDrawable",
+            title = "SVG to VectorDrawable",
+            subtitle = "Prepare an Android XML vector from an SVG file.",
+            primaryLabel = "Choose SVG",
             onSingle = { svgPicker.launch(arrayOf("image/svg+xml", "text/xml", "*/*")) },
             onBatch = { nav.navigate(Routes.BATCH) },
         )
 
-        Spacer(Modifier.height(10.dp))
-
-        // ── XML -> SVG ────────────────────────────────────────────────────
         ConversionOption(
-            title = "Convert XML to SVG",
-            subtitle = "Android VectorDrawable \u2192 Vector image",
+            title = "VectorDrawable to SVG",
+            subtitle = "Turn Android VectorDrawable XML back into SVG.",
+            primaryLabel = "Choose XML",
             onSingle = { xmlPicker.launch(arrayOf("text/xml", "application/xml", "*/*")) },
             onBatch = { nav.navigate(Routes.BATCH_REVERSE) },
         )
 
-        Spacer(Modifier.weight(1f, fill = true))
-
-        // ── About (restored) ───────────────────────────────────────────────
-        TextButton(onClick = { nav.navigate(Routes.ABOUT) }) {
-            Text(
-                "About this app",
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
-                fontSize = 12.sp,
-            )
+        Spacer(Modifier.weight(1f))
+        TextButton(
+            onClick = { nav.navigate(Routes.ABOUT) },
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        ) {
+            Text("About this app")
         }
     }
 }
@@ -124,42 +132,40 @@ fun HomeScreen(
 private fun ConversionOption(
     title: String,
     subtitle: String,
+    primaryLabel: String,
     onSingle: () -> Unit,
     onBatch: () -> Unit,
 ) {
     ElevatedCard(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Text(
-                title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+        Column(
+            Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
                 subtitle,
-                fontSize = 11.sp,
-                color = SlateGray,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(4.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedButton(
-                    onClick = onSingle,
-                    shape = RoundedCornerShape(50),
-                    modifier = Modifier.weight(1f),
-                ) { Text("Single") }
                 Button(
-                    onClick = onBatch,
-                    shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(containerColor = FreshTeal),
+                    onClick = onSingle,
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f),
-                ) { Text("Batch", color = PureWhite, fontWeight = FontWeight.SemiBold) }
+                ) { Text(primaryLabel, textAlign = TextAlign.Center) }
+                OutlinedButton(
+                    onClick = onBatch,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Batch files", textAlign = TextAlign.Center) }
             }
         }
     }

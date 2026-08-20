@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 
 sealed interface ConvertUiState {
     data object Idle : ConvertUiState
-    data object Working : ConvertUiState
+    data class Working(val sourceName: String) : ConvertUiState
     @Suppress("ArrayInDataClass")
     data class Done(
         val sourceName: String,
@@ -36,7 +36,11 @@ sealed interface ConvertUiState {
         val vdPreviewPng: ByteArray?,
         val analysisJson: String? = null,   // structural analysis for the properties panel
     ) : ConvertUiState
-    data class Error(val message: String) : ConvertUiState
+    data class Error(
+        val sourceName: String,
+        val message: String,
+        val retryAvailable: Boolean = true,
+    ) : ConvertUiState
 }
 
 class ConversionViewModel(
@@ -62,21 +66,28 @@ class ConversionViewModel(
 
     private var lastVdXml: String? = null
     private var lastSourceName: String? = null
+    private var lastUri: Uri? = null
 
     fun convert(uri: Uri) {
-        _state.value = ConvertUiState.Working
+        lastUri = uri
+        lastVdXml = null
+        lastSourceName = null
+        _state.value = ConvertUiState.Working("Preparing SVG…")
+
         viewModelScope.launch {
-            val px = runCatching { settingsRepo.settings.first().previewPx }.getOrDefault(256)
             var name = "image.svg"
             try {
+                name = withContext(Dispatchers.IO) { repo.displayName(uri) }
+                _state.value = ConvertUiState.Working(name)
+                val px = runCatching { settingsRepo.settings.first().previewPx }.getOrDefault(256)
                 val result = withContext(Dispatchers.IO) {
-                    name = repo.displayName(uri)
                     val svgBytes = repo.readBytes(uri)
-                    require(svgBytes.isNotEmpty()) { "empty file" }
+                    require(svgBytes.isNotEmpty()) { "The selected file is empty." }
                     val xml = native.convertSvg(svgBytes)
-                    // Run previews and analysis in parallel — all independent.
+                    // Previews and structural analysis are optional enhancements; a
+                    // successful conversion remains usable even if one fails.
                     val svgPngDef = async { runCatching { native.renderSvgPreview(svgBytes, px) }.getOrNull() }
-                    val vdPngDef  = async { runCatching { native.renderVdPreview(xml, px) }.getOrNull() }
+                    val vdPngDef = async { runCatching { native.renderVdPreview(xml, px) }.getOrNull() }
                     val analysisDef = async { runCatching { native.analyzeVector(svgBytes) }.getOrNull() }
                     lastVdXml = xml
                     lastSourceName = name
@@ -93,13 +104,17 @@ class ConversionViewModel(
             } catch (e: ConversionException) {
                 val msg = e.userMessage(getApplication())
                 HistoryStore.add(name, "", ok = false, error = msg)
-                _state.value = ConvertUiState.Error(msg)
+                _state.value = ConvertUiState.Error(name, msg, retryAvailable = lastUri != null)
             } catch (e: Exception) {
                 val msg = e.message ?: "Unknown error"
                 HistoryStore.add(name, "", ok = false, error = msg)
-                _state.value = ConvertUiState.Error(msg)
+                _state.value = ConvertUiState.Error(name, msg, retryAvailable = lastUri != null)
             }
         }
+    }
+
+    fun retry() {
+        lastUri?.let(::convert)
     }
 
     /**
@@ -134,5 +149,6 @@ class ConversionViewModel(
         _state.value = ConvertUiState.Idle
         lastVdXml = null
         lastSourceName = null
+        lastUri = null
     }
 }

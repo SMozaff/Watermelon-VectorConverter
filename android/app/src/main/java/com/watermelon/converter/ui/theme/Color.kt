@@ -7,12 +7,23 @@ package com.watermelon.converter.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// WVGC official palette
-val WatermelonRed  = Color(0xFFE63946) // vibrant red — primary
-val FreshTeal      = Color(0xFF2A9D8F) // backgrounds / secondary
-val DeepNavy       = Color(0xFF1D3557) // dark blue
-val Charcoal       = Color(0xFF1A1A2E) // deep black
-val SlateGray      = Color(0xFF4A5568) // midtones
-val OffWhite       = Color(0xFFF8F9FA) // highlights
-val DeepCharcoal   = Color(0xFF0F172A) // deep shadows
-val PureWhite      = Color(0xFFFFFFFF)
+// Brand tokens. Primary and destructive action colors are intentionally dark
+// enough to support normal-size white labels at WCAG AA contrast.
+val WatermelonRed = Color(0xFFC62839)
+val FreshTeal = Color(0xFF147A70)
+val DeepNavy = Color(0xFF1D3557)
+val Charcoal = Color(0xFF17221D)
+val SlateGray = Color(0xFF52615B)
+val OffWhite = Color(0xFFF7FAF8)
+val DeepCharcoal = Color(0xFF09120E)
+val PureWhite = Color(0xFFFFFFFF)
+
+val TealContainer = Color(0xFFCBEFE7)
+val OnTealContainer = Color(0xFF003C35)
+val WatermelonContainer = Color(0xFFFFDAD9)
+val OnWatermelonContainer = Color(0xFF410008)
+val LightSurfaceVariant = Color(0xFFE3E9E4)
+val DarkSurface = Color(0xFF121C17)
+val DarkSurfaceVariant = Color(0xFF26332C)
+val DarkTeal = Color(0xFF88D7C9)
+val DarkWatermelon = Color(0xFFFFB3B1)

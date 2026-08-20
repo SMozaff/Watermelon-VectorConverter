@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
  */
 sealed interface ReverseConvertUiState {
     data object Idle : ReverseConvertUiState
-    data object Working : ReverseConvertUiState
+    data class Working(val sourceName: String) : ReverseConvertUiState
     @Suppress("ArrayInDataClass")
     data class Done(
         val sourceName: String,
@@ -44,7 +44,11 @@ sealed interface ReverseConvertUiState {
         val svgPreviewPng: ByteArray?,  // preview of the CONVERTED SVG output
         val analysisJson: String? = null,
     ) : ReverseConvertUiState
-    data class Error(val message: String) : ReverseConvertUiState
+    data class Error(
+        val sourceName: String,
+        val message: String,
+        val retryAvailable: Boolean = true,
+    ) : ReverseConvertUiState
 }
 
 class ReverseConversionViewModel(
@@ -62,17 +66,23 @@ class ReverseConversionViewModel(
 
     private var lastSvgXml: String? = null
     private var lastSourceName: String? = null
+    private var lastUri: Uri? = null
 
     fun convert(uri: Uri) {
-        _state.value = ReverseConvertUiState.Working
+        lastUri = uri
+        lastSvgXml = null
+        lastSourceName = null
+        _state.value = ReverseConvertUiState.Working("Preparing VectorDrawable…")
+
         viewModelScope.launch {
-            val px = runCatching { settingsRepo.settings.first().previewPx }.getOrDefault(256)
             var name = "image.xml"
             try {
+                name = withContext(Dispatchers.IO) { repo.displayName(uri) }
+                _state.value = ReverseConvertUiState.Working(name)
+                val px = runCatching { settingsRepo.settings.first().previewPx }.getOrDefault(256)
                 val result = withContext(Dispatchers.IO) {
-                    name = repo.displayName(uri)
                     val vdBytes = repo.readBytes(uri)
-                    require(vdBytes.isNotEmpty()) { "empty file" }
+                    require(vdBytes.isNotEmpty()) { "The selected file is empty." }
                     val svg = native.convertVd(vdBytes)
                     val vdPngDef = async { runCatching { native.renderVdPreview(String(vdBytes), px) }.getOrNull() }
                     val svgPngDef = async { runCatching { native.renderSvgPreview(svg.toByteArray(), px) }.getOrNull() }
@@ -92,13 +102,17 @@ class ReverseConversionViewModel(
             } catch (e: ConversionException) {
                 val msg = e.userMessage(getApplication())
                 HistoryStore.add(name, "", ok = false, error = msg)
-                _state.value = ReverseConvertUiState.Error(msg)
+                _state.value = ReverseConvertUiState.Error(name, msg, retryAvailable = lastUri != null)
             } catch (e: Exception) {
                 val msg = e.message ?: "Unknown error"
                 HistoryStore.add(name, "", ok = false, error = msg)
-                _state.value = ReverseConvertUiState.Error(msg)
+                _state.value = ReverseConvertUiState.Error(name, msg, retryAvailable = lastUri != null)
             }
         }
+    }
+
+    fun retry() {
+        lastUri?.let(::convert)
     }
 
     /**
@@ -129,5 +143,6 @@ class ReverseConversionViewModel(
         _state.value = ReverseConvertUiState.Idle
         lastSvgXml = null
         lastSourceName = null
+        lastUri = null
     }
 }

@@ -10,43 +10,64 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
-    primary = WatermelonRed,
+    primary = FreshTeal,
     onPrimary = PureWhite,
-    secondary = FreshTeal,
+    primaryContainer = TealContainer,
+    onPrimaryContainer = OnTealContainer,
+    secondary = WatermelonRed,
     onSecondary = PureWhite,
+    secondaryContainer = WatermelonContainer,
+    onSecondaryContainer = OnWatermelonContainer,
     tertiary = DeepNavy,
     background = OffWhite,
     onBackground = Charcoal,
-    surface = OffWhite,
+    surface = PureWhite,
     onSurface = Charcoal,
-    surfaceVariant = SlateGray,
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = SlateGray,
+    outline = SlateGray,
+    outlineVariant = LightSurfaceVariant,
     error = WatermelonRed,
+    onError = PureWhite,
+    errorContainer = WatermelonContainer,
+    onErrorContainer = OnWatermelonContainer,
 )
 
 private val DarkColors = darkColorScheme(
-    primary = WatermelonRed,
-    onPrimary = PureWhite,
-    secondary = FreshTeal,
-    onSecondary = OffWhite,
-    tertiary = DeepNavy,
+    primary = DarkTeal,
+    onPrimary = DeepCharcoal,
+    primaryContainer = FreshTeal,
+    onPrimaryContainer = TealContainer,
+    secondary = DarkWatermelon,
+    onSecondary = OnWatermelonContainer,
+    secondaryContainer = WatermelonRed,
+    onSecondaryContainer = WatermelonContainer,
+    tertiary = DarkTeal,
     background = DeepCharcoal,
     onBackground = OffWhite,
-    surface = Charcoal,
+    surface = DarkSurface,
     onSurface = OffWhite,
-    surfaceVariant = SlateGray,
-    error = WatermelonRed,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = Color(0xFFC2CDC6),
+    outline = Color(0xFF8C9991),
+    outlineVariant = DarkSurfaceVariant,
+    error = DarkWatermelon,
+    onError = OnWatermelonContainer,
+    errorContainer = WatermelonRed,
+    onErrorContainer = WatermelonContainer,
 )
 
 @Composable
 fun WatermelonTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = WatermelonTypography,
-        content = content
+        content = content,
     )
 }

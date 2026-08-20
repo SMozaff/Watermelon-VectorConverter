@@ -19,10 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.watermelon.converter.Routes
 import com.watermelon.converter.ui.components.VectorPropertiesPanel
@@ -34,7 +37,6 @@ import com.watermelon.converter.viewmodel.ConvertUiState
 import com.watermelon.converter.viewmodel.ReverseConversionViewModel
 import com.watermelon.converter.viewmodel.ReverseConvertUiState
 import com.watermelon.converter.viewmodel.SettingsViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,18 +49,36 @@ fun PreviewScreen(
     val state by vm.state.collectAsState()
     val revState by revVm.state.collectAsState()
     val settings by settingsVm.settings.collectAsState()
-    val done = state as? ConvertUiState.Done
-    val revDone = revState as? ReverseConvertUiState.Done
-    // Whichever direction most recently produced a result drives this screen.
-    // Both VMs reset() on "New", so at most one is ever non-idle at a time.
+    // StateFlow delegation cannot be smart-cast by Kotlin. These stable local
+    // values keep the state renderer exhaustive and safe across recomposition.
+    val forwardState = state
+    val reverseState = revState
+    val done = forwardState as? ConvertUiState.Done
+    val revDone = reverseState as? ReverseConvertUiState.Done
+    val forwardActive = forwardState !is ConvertUiState.Idle
     val ctx = LocalContext.current
+
+    val title = when {
+        forwardActive && forwardState is ConvertUiState.Working -> forwardState.sourceName
+        forwardActive && forwardState is ConvertUiState.Error -> forwardState.sourceName
+        done != null -> done.sourceName
+        reverseState is ReverseConvertUiState.Working -> reverseState.sourceName
+        reverseState is ReverseConvertUiState.Error -> reverseState.sourceName
+        revDone != null -> revDone.sourceName
+        else -> "Preview"
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    TextButton(onClick = { nav.popBackStack() }) {
+                        Text("Back", color = MaterialTheme.colorScheme.primary)
+                    }
+                },
                 title = {
                     Text(
-                        done?.sourceName ?: revDone?.sourceName ?: "Preview",
+                        title,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onBackground,
                         maxLines = 1,
@@ -67,17 +87,17 @@ fun PreviewScreen(
                 actions = {
                     if (done != null) {
                         TextButton(onClick = { ShareUtils.copyToClipboard(ctx, "VectorDrawable", done.vdXml) }) {
-                            Text("Copy", color = FreshTeal)
+                            Text("Copy", color = MaterialTheme.colorScheme.primary)
                         }
                         TextButton(onClick = { ShareUtils.shareText(ctx, done.sourceName, done.vdXml) }) {
-                            Text("Share", color = FreshTeal)
+                            Text("Share", color = MaterialTheme.colorScheme.primary)
                         }
                     } else if (revDone != null) {
                         TextButton(onClick = { ShareUtils.copyToClipboard(ctx, "SVG", revDone.svgXml) }) {
-                            Text("Copy", color = FreshTeal)
+                            Text("Copy", color = MaterialTheme.colorScheme.primary)
                         }
                         TextButton(onClick = { ShareUtils.shareText(ctx, revDone.sourceName, revDone.svgXml) }) {
-                            Text("Share", color = FreshTeal)
+                            Text("Share", color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 },
@@ -99,138 +119,281 @@ fun PreviewScreen(
                             vm.reset(); revVm.reset()
                             nav.navigate(Routes.PAGER) { popUpTo(Routes.PAGER) { inclusive = false } }
                         },
-                        shape = RoundedCornerShape(50),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f),
                     ) { Text("New") }
                     Button(
                         onClick = { nav.navigate(Routes.EXPORT) },
-                        shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = FreshTeal),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.weight(1f),
-                    ) { Text("Export", color = PureWhite, fontWeight = FontWeight.Bold) }
+                    ) { Text("Export", fontWeight = FontWeight.Bold) }
                 }
             }
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { pad ->
-        if (done == null && revDone == null) {
-            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) {
-                Text("Nothing to preview yet.", color = SlateGray)
+        when {
+            forwardActive && forwardState is ConvertUiState.Working -> {
+                ConversionWorking(
+                    modifier = Modifier.padding(pad),
+                    sourceName = forwardState.sourceName,
+                    direction = "SVG → VectorDrawable",
+                    onBack = { nav.popBackStack() },
+                )
             }
-            return@Scaffold
+            forwardActive && forwardState is ConvertUiState.Error -> {
+                ConversionError(
+                    modifier = Modifier.padding(pad),
+                    sourceName = forwardState.sourceName,
+                    message = forwardState.message,
+                    retryAvailable = forwardState.retryAvailable,
+                    onRetry = vm::retry,
+                    onChooseAnother = {
+                        vm.reset()
+                        nav.navigate(Routes.PAGER) { popUpTo(Routes.PAGER) { inclusive = false } }
+                    },
+                )
+            }
+            !forwardActive && reverseState is ReverseConvertUiState.Working -> {
+                ConversionWorking(
+                    modifier = Modifier.padding(pad),
+                    sourceName = reverseState.sourceName,
+                    direction = "VectorDrawable → SVG",
+                    onBack = { nav.popBackStack() },
+                )
+            }
+            !forwardActive && reverseState is ReverseConvertUiState.Error -> {
+                ConversionError(
+                    modifier = Modifier.padding(pad),
+                    sourceName = reverseState.sourceName,
+                    message = reverseState.message,
+                    retryAvailable = reverseState.retryAvailable,
+                    onRetry = revVm::retry,
+                    onChooseAnother = {
+                        revVm.reset()
+                        nav.navigate(Routes.PAGER) { popUpTo(Routes.PAGER) { inclusive = false } }
+                    },
+                )
+            }
+            done != null -> SuccessContent(
+                modifier = Modifier.padding(pad),
+                sourceName = done.sourceName,
+                outputXml = done.vdXml,
+                outputLabel = "VD XML",
+                sourcePreviewLabel = "Original SVG",
+                sourcePreview = done.svgPreviewPng,
+                outputPreviewLabel = "Generated VD",
+                outputPreview = done.vdPreviewPng,
+                analysisJson = done.analysisJson,
+                showFileProperties = settings.showFileProperties,
+                isForward = true,
+            )
+            revDone != null -> SuccessContent(
+                modifier = Modifier.padding(pad),
+                sourceName = revDone.sourceName,
+                outputXml = revDone.svgXml,
+                outputLabel = "SVG",
+                sourcePreviewLabel = "Original VD",
+                sourcePreview = revDone.vdPreviewPng,
+                outputPreviewLabel = "Generated SVG",
+                outputPreview = revDone.svgPreviewPng,
+                analysisJson = revDone.analysisJson,
+                showFileProperties = settings.showFileProperties,
+                isForward = false,
+            )
+            else -> PreviewIdle(
+                modifier = Modifier.padding(pad),
+                onChooseFile = {
+                    nav.navigate(Routes.PAGER) { popUpTo(Routes.PAGER) { inclusive = false } }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreviewIdle(modifier: Modifier = Modifier, onChooseFile: () -> Unit) {
+    Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Column(
+                Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Ready when you are", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "Choose an SVG or VectorDrawable XML file to start a conversion.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Button(onClick = onChooseFile, shape = RoundedCornerShape(14.dp)) {
+                    Text("Choose a file")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversionWorking(
+    modifier: Modifier = Modifier,
+    sourceName: String,
+    direction: String,
+    onBack: () -> Unit,
+) {
+    Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Column(
+                Modifier.padding(24.dp).semantics {
+                    contentDescription = "Converting $sourceName. Please wait."
+                },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                Text("Converting", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(sourceName, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "$direction is in progress. Previews are being prepared after conversion.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                TextButton(onClick = onBack) { Text("Continue browsing") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversionError(
+    modifier: Modifier = Modifier,
+    sourceName: String,
+    message: String,
+    retryAvailable: Boolean,
+    onRetry: () -> Unit,
+    onChooseAnother: () -> Unit,
+) {
+    Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ),
+        ) {
+            Column(
+                Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Conversion could not finish", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(sourceName, fontWeight = FontWeight.SemiBold)
+                Text(message)
+                Text(
+                    "No output was saved. Retry this file or choose another one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (retryAvailable) {
+                        Button(onClick = onRetry, shape = RoundedCornerShape(14.dp)) { Text("Retry") }
+                    }
+                    OutlinedButton(onClick = onChooseAnother, shape = RoundedCornerShape(14.dp)) {
+                        Text("Choose another")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SuccessContent(
+    modifier: Modifier = Modifier,
+    sourceName: String,
+    outputXml: String,
+    outputLabel: String,
+    sourcePreviewLabel: String,
+    sourcePreview: ByteArray?,
+    outputPreviewLabel: String,
+    outputPreview: ByteArray?,
+    analysisJson: String?,
+    showFileProperties: Boolean,
+    isForward: Boolean,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        ConversionReport(sourceName, outputXml, outputLabel = outputLabel)
+
+        Text(
+            "Both previews are approximate (rendered via resvg, not Android's pipeline).",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            PreviewTile(sourcePreviewLabel, sourcePreview, Modifier.weight(1f))
+            PreviewTile(outputPreviewLabel, outputPreview, Modifier.weight(1f))
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(pad)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+        if (showFileProperties && analysisJson != null) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            val props = remember(analysisJson) {
+                runCatching {
+                    if (isForward) {
+                        com.watermelon.converter.data.model.VectorProperties.fromJson(
+                            name = sourceName,
+                            json = analysisJson,
+                        )
+                    } else {
+                        com.watermelon.converter.data.model.VectorProperties.fromJson(
+                            name = sourceName,
+                            json = analysisJson,
+                        )
+                    }
+                }.getOrNull()
+            }
+            if (props != null) VectorPropertiesPanel(props)
+        }
+
+        var expanded by remember { mutableStateOf(false) }
+        ElevatedCard(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
-            if (done != null) {
-                // ── Conversion report ────────────────────────────────────────────
-                ConversionReport(done.sourceName, done.vdXml, outputLabel = "VD XML")
-
-                Text(
-                    "Both previews are approximate (rendered via resvg, not Android's pipeline).",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = SlateGray,
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    PreviewTile("Original SVG", done.svgPreviewPng, Modifier.weight(1f))
-                    PreviewTile("Generated VD",  done.vdPreviewPng,  Modifier.weight(1f))
-                }
-
-                if (settings.showFileProperties && done.analysisJson != null) {
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
-                    val props = remember(done.analysisJson) {
-                        runCatching {
-                            com.watermelon.converter.data.model.VectorProperties.fromJson(
-                                name = done.sourceName,
-                                json = done.analysisJson,
-                            )
-                        }.getOrNull()
-                    }
-                    if (props != null) {
-                        VectorPropertiesPanel(props)
+            Column(Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        outputLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(if (expanded) "Collapse" else "Inspect")
                     }
                 }
-
-                var xmlExpanded by remember { mutableStateOf(false) }
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "VectorDrawable XML",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = DeepNavy,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { xmlExpanded = !xmlExpanded }) {
-                                Text(if (xmlExpanded) "Collapse" else "Expand", color = FreshTeal, fontSize = 12.sp)
-                            }
-                        }
-                        if (xmlExpanded) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(done.vdXml, style = MaterialTheme.typography.bodySmall, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                        }
-                    }
-                }
-            } else if (revDone != null) {
-                // ── Conversion report (reverse direction) ────────────────────────
-                ConversionReport(revDone.sourceName, revDone.svgXml, outputLabel = "SVG")
-
-                Text(
-                    "Both previews are approximate (rendered via resvg, not Android's pipeline).",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = SlateGray,
-                )
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    PreviewTile("Original VD",  revDone.vdPreviewPng,  Modifier.weight(1f))
-                    PreviewTile("Generated SVG", revDone.svgPreviewPng, Modifier.weight(1f))
-                }
-
-                if (settings.showFileProperties && revDone.analysisJson != null) {
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
-                    val props = remember(revDone.analysisJson) {
-                        runCatching {
-                            com.watermelon.converter.data.model.VectorProperties.fromJson(
-                                name = revDone.sourceName,
-                                json = revDone.analysisJson,
-                            )
-                        }.getOrNull()
-                    }
-                    if (props != null) {
-                        VectorPropertiesPanel(props)
-                    }
-                }
-
-                var svgExpanded by remember { mutableStateOf(false) }
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "SVG XML",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = DeepNavy,
-                                modifier = Modifier.weight(1f),
-                            )
-                            TextButton(onClick = { svgExpanded = !svgExpanded }) {
-                                Text(if (svgExpanded) "Collapse" else "Expand", color = FreshTeal, fontSize = 12.sp)
-                            }
-                        }
-                        if (svgExpanded) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(revDone.svgXml, style = MaterialTheme.typography.bodySmall, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
-                        }
-                    }
+                if (expanded) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        outputXml,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    )
                 }
             }
         }
@@ -240,24 +403,18 @@ fun PreviewScreen(
 @Composable
 private fun ConversionReport(sourceName: String, outputXml: String, outputLabel: String) {
     val lineCount = outputXml.lines().size
-    val sizeKb    = "%.1f KB".format(outputXml.toByteArray().size / 1024.0)
+    val sizeKb = "%.1f KB".format(outputXml.toByteArray().size / 1024.0)
 
     ElevatedCard(
         Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.elevatedCardColors(
-            containerColor = FreshTeal.copy(alpha = 0.08f),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         ),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "✓  Conversion successful",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = FreshTeal,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Conversion successful", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             ReportRow("Source file", sourceName)
             ReportRow("Output size", sizeKb)
             ReportRow("$outputLabel lines", lineCount.toString())
@@ -268,34 +425,43 @@ private fun ConversionReport(sourceName: String, outputXml: String, outputLabel:
 @Composable
 private fun ReportRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth()) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = SlateGray, modifier = Modifier.width(100.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(100.dp),
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
 @Composable
 private fun PreviewTile(label: String, png: ByteArray?, modifier: Modifier = Modifier) {
-    OutlinedCard(modifier) {
+    OutlinedCard(
+        modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Column(
-            Modifier.fillMaxWidth().padding(8.dp),
+            Modifier.fillMaxWidth().padding(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(label, style = MaterialTheme.typography.labelLarge, color = SlateGray)
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             if (png != null) {
                 val bmp = remember(png) { BitmapFactory.decodeByteArray(png, 0, png.size) }
                 if (bmp != null) {
                     Box(
-                        Modifier.size(120.dp).background(Color.White),
+                        Modifier.size(120.dp).background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center,
                     ) {
                         Image(bmp.asImageBitmap(), contentDescription = label, modifier = Modifier.size(120.dp))
                     }
                 } else {
-                    Text("—", textAlign = TextAlign.Center, color = SlateGray)
+                    Text("Preview unavailable", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                Text("preview unavailable", textAlign = TextAlign.Center, color = SlateGray)
+                Text("Preview unavailable", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
