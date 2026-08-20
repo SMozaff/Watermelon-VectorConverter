@@ -1,5 +1,5 @@
 // Watermelon Vector Converter
-// Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
+// Copyright (c) 2026 Soheil Mozaffari. All rights reserved.
 // Proprietary and source-available. Reuse prohibited without written permission.
 // See LICENSE for terms.
 
@@ -9,6 +9,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -52,6 +54,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.watermelon.converter.R
 import com.watermelon.converter.ui.theme.WatermelonRed
+
+private const val IFEM_DOCTRINE_URL = "https://IFEM-doctrine.github.io/"
+private const val PERSONAL_WEBSITE_URL = "https://SMozaff.github.io/"
+private const val IFEM_DOCTRINE_LABEL = "IFEM-doctrine.github.io"
+private const val PERSONAL_WEBSITE_LABEL = "SMozaff.github.io"
 
 private val technologyBadges = listOf(
     "Kotlin",
@@ -129,7 +136,8 @@ fun AboutScreen(nav: NavController) {
                 SectionDivider("TECHNOLOGY STACK")
                 TechnologyStack()
                 DeveloperProfile()
-                IfemDoctrineCard(onOpen = { uriHandler.openUri("https://ifem.dev") })
+                PersonalWebsiteCard(onOpen = { uriHandler.openUri(PERSONAL_WEBSITE_URL) })
+                IfemDoctrineCard(onOpen = { uriHandler.openUri(IFEM_DOCTRINE_URL) })
                 Footer()
             }
         }
@@ -152,9 +160,9 @@ private fun ProductIdentity() {
             shadowElevation = 2.dp,
         ) {
             Image(
-                painter = painterResource(id = R.drawable.watermelon_gen),
+                painter = painterResource(id = R.drawable.watermelon_iphone_logo),
                 contentDescription = "Watermelon Vector Graphics Converter logo",
-                modifier = Modifier.padding(14.dp),
+                modifier = Modifier.padding(12.dp),
                 contentScale = ContentScale.Fit,
             )
         }
@@ -319,7 +327,7 @@ private fun DeveloperProfile() {
             )
             Surface(
                 modifier = Modifier.size(9.dp),
-                shape = RoundedCornerShape(50),
+                shape = CircleShape,
                 color = WatermelonRed,
                 content = {},
             )
@@ -351,6 +359,57 @@ private fun DeveloperProfile() {
 }
 
 @Composable
+private fun PersonalWebsiteCard(onOpen: () -> Unit) {
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Open Soheil Mozaffari personal website",
+                onClick = onOpen,
+            ),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            LinkGlyph(color = WatermelonRed)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "Personal website",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Visit Soheil Mozaffari online",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = PERSONAL_WEBSITE_LABEL,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun IfemDoctrineCard(onOpen: () -> Unit) {
     OutlinedCard(
         modifier = Modifier
@@ -375,7 +434,7 @@ private fun IfemDoctrineCard(onOpen: () -> Unit) {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ifem_mark),
-                contentDescription = null,
+                contentDescription = "IFEM mark",
                 modifier = Modifier.size(width = 34.dp, height = 42.dp),
                 contentScale = ContentScale.Fit,
             )
@@ -396,12 +455,30 @@ private fun IfemDoctrineCard(onOpen: () -> Unit) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "ifem.dev",
+                    text = IFEM_DOCTRINE_LABEL,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LinkGlyph(color: androidx.compose.ui.graphics.Color) {
+    Surface(
+        modifier = Modifier.size(38.dp),
+        shape = CircleShape,
+        color = color.copy(alpha = 0.14f),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = "↗",
+                color = color,
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.titleLarge,
+            )
         }
     }
 }

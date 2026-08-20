@@ -1,5 +1,5 @@
 # Watermelon Vector Converter — Desktop (native, no WebView/Tauri)
-# Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
+# Copyright (c) 2026 Soheil Mozaffari. All rights reserved.
 #
 # Replaces the former tauri/ and viewer/ crates entirely. Both are now one
 # native iced application with two modes (converter, viewer) selected by
@@ -11,7 +11,7 @@
 name = "wvgc-desktop"
 version = "0.2.0"
 edition = "2021"
-authors = ["Suhail Muzaffari <so.muzaff@gmail.com>"]
+authors = ["Soheil Mozaffari <so.muzaff@gmail.com>"]
 license-file = "../LICENSE"
 description = "Convert between SVG and Android VectorDrawable XML — native desktop app, no WebView"
 repository = "https://github.com/muzaff-beep/Watermelon-VectorConverter"
@@ -21,7 +21,7 @@ name = "wvgc-desktop"
 path = "src/main.rs"
 
 [dependencies]
-iced = { version = "0.14", features = ["image", "tokio"] }
+iced = { version = "0.14", features = ["canvas", "image", "tokio"] }
 # Native file/folder dialogs — the standard pairing for iced, since iced
 # itself has no built-in dialog widget. Async API used via iced::Task.
 rfd = "0.15"
@@ -56,8 +56,8 @@ core-foundation = "0.9"
 # dependencies (X11/Wayland/GTK) from the built binary itself, rather than
 # hand-maintaining a version-pinned list that would drift out of date.
 [package.metadata.deb]
-maintainer = "Suhail Muzaffari <so.muzaff@gmail.com>"
-copyright = "2026, Suhail Muzaffari"
+maintainer = "Soheil Mozaffari <so.muzaff@gmail.com>"
+copyright = "2026, Soheil Mozaffari"
 extended-description = """\
 Convert between SVG vector graphics and Android VectorDrawable XML, in both \
 directions, with single-file and batch (ZIP) conversion, plus a built-in \

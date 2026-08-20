@@ -1,16 +1,22 @@
 // Watermelon Vector Converter — Desktop conversion workspace.
-// Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
+// Copyright (c) 2026 Soheil Mozaffari. All rights reserved.
 
 use iced::widget::{
-    button, center, column, container, image, progress_bar, row, scrollable, space, text,
+    button, canvas, center, column, container, image, progress_bar, row, scrollable, space, text,
 };
 use iced::{
-    clipboard, window, Background, Border, Color, ContentFit, Element, Length, Subscription, Task,
+    clipboard, mouse, window, Background, Border, Color, ContentFit, Element, Length, Point,
+    Rectangle, Renderer, Size, Subscription, Task, Theme,
 };
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Duration;
 
-const SPLASH_ART: &[u8] = include_bytes!("../../assets/watermelon_launch_art.png");
+const ABOUT_LOGO: &[u8] = include_bytes!("../../assets/watermelon_iphone_logo.png");
+const IFEM_DOCTRINE_URL: &str = "https://IFEM-doctrine.github.io/";
+const PERSONAL_WEBSITE_URL: &str = "https://SMozaff.github.io/";
+const IFEM_DOCTRINE_LABEL: &str = "IFEM-doctrine.github.io";
+const PERSONAL_WEBSITE_LABEL: &str = "SMozaff.github.io";
 const SPLASH_TICK: Duration = Duration::from_millis(16);
 const SPLASH_DURATION: Duration = Duration::from_millis(1500);
 
@@ -249,6 +255,15 @@ impl Converter {
             Message::ToggleAppearance => {
                 self.appearance = self.appearance.toggled();
             }
+            Message::OpenPersonalWebsite => {
+                return Task::perform(open_url(PERSONAL_WEBSITE_URL), |_| {
+                    Message::LinkOpenFinished
+                });
+            }
+            Message::OpenIfemDoctrine => {
+                return Task::perform(open_url(IFEM_DOCTRINE_URL), |_| Message::LinkOpenFinished);
+            }
+            Message::LinkOpenFinished => {}
             Message::DirectionSelected(direction) => {
                 self.direction = direction;
                 self.notice = None;
@@ -390,30 +405,16 @@ impl Converter {
         let progress = (self.splash_elapsed.as_millis() as f32
             / SPLASH_DURATION.as_millis() as f32)
             .clamp(0.0, 1.0);
-        // Cubic ease-out creates a quiet pop-in without animating a fabricated
-        // conversion percentage; the artwork already contains its launch bar.
-        let eased = 1.0 - (1.0 - progress).powi(3);
-        let art_size = 310.0 + (48.0 * eased);
-        let glow = 0.08 + (0.18 * eased);
 
-        let art = container(
-            image(image::Handle::from_bytes(SPLASH_ART))
-                .width(Length::Fixed(art_size))
-                .height(Length::Fixed(art_size))
-                .content_fit(ContentFit::Contain),
+        container(
+            canvas::Canvas::new(SplashScene { progress })
+                .width(Length::Fill)
+                .height(Length::Fill),
         )
-        .padding(14)
-        .style(move |_| container::Style {
-            background: Some(Background::Color(Color::from_rgba8(42, 255, 86, glow))),
-            border: Border::default().rounded(32.0),
-            ..container::Style::default()
-        });
-
-        container(center(art))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(|_| container::Style::default().background(Color::BLACK))
-            .into()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_| container::Style::default().background(Color::from_rgb8(5, 12, 9)))
+        .into()
     }
 
     fn workspace_view(&self) -> Element<'_, Message> {
@@ -697,11 +698,12 @@ impl Converter {
 
         let hero = column![
             container(
-                image(image::Handle::from_bytes(SPLASH_ART))
+                image(image::Handle::from_bytes(ABOUT_LOGO))
                     .width(Length::Fixed(106.0))
-                    .height(Length::Fixed(106.0)),
+                    .height(Length::Fixed(106.0))
+                    .content_fit(ContentFit::Contain),
             )
-            .padding(14)
+            .padding(12)
             .style(move |_| panel_style(p.surface, p.border)),
             text("Watermelon").size(34).color(p.on_background),
             text("Vector Graphics Converter").size(17).color(p.muted),
@@ -711,7 +713,7 @@ impl Converter {
 
         let ifem_signature = container(
             row![
-                text("◇").size(38).color(p.primary),
+                ifem_mark(),
                 column![
                     text("Built with IFEM").size(16).color(p.primary),
                     text("Interface-First Engineering Methodology")
@@ -724,6 +726,7 @@ impl Converter {
             .align_y(iced::Alignment::Center),
         )
         .padding([14, 18])
+        .width(Length::Fill)
         .style(move |_| panel_style(p.surface, p.border));
 
         let badges = column![
@@ -753,7 +756,7 @@ impl Converter {
         .align_x(iced::Alignment::Center);
 
         let stack = column![
-            text("TECHNOLOGY STACK").size(12).color(p.muted),
+            section_divider("TECHNOLOGY STACK", p),
             technology_layer(
                 "Application layer",
                 "Kotlin · Jetpack Compose · Material 3",
@@ -770,19 +773,54 @@ impl Converter {
         .align_x(iced::Alignment::Center);
 
         let developer = column![
-            text("◆").size(14).color(p.watermelon_red),
+            row![
+                horizontal_divider(p),
+                container(space::horizontal())
+                    .width(Length::Fixed(9.0))
+                    .height(Length::Fixed(9.0))
+                    .style(move |_| container::Style {
+                        background: Some(Background::Color(p.watermelon_red)),
+                        border: Border::default().rounded(99.0),
+                        ..container::Style::default()
+                    }),
+                horizontal_divider(p),
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
             text("DEVELOPED BY").size(12).color(p.primary),
             text("Soheil Mozaffari").size(22).color(p.on_background),
             text("Software Engineer · Systems Architect")
                 .size(14)
                 .color(p.muted),
         ]
-        .spacing(5)
-        .align_x(iced::Alignment::Center);
+        .spacing(6)
+        .align_x(iced::Alignment::Center)
+        .width(Length::Fill);
 
-        let doctrine = container(
+        let personal_site = button(
             row![
-                text("◇").size(30).color(p.primary),
+                link_glyph(p),
+                column![
+                    text("Personal website").size(15).color(p.primary),
+                    text("Visit Soheil Mozaffari online")
+                        .size(13)
+                        .color(p.muted),
+                    text(PERSONAL_WEBSITE_LABEL).size(13).color(p.primary),
+                ]
+                .spacing(3)
+                .width(Length::Fill),
+            ]
+            .spacing(14)
+            .align_y(iced::Alignment::Center),
+        )
+        .on_press(Message::OpenPersonalWebsite)
+        .padding(16)
+        .width(Length::Fill)
+        .style(move |_, _| link_card_style(p));
+
+        let doctrine = button(
+            row![
+                ifem_mark(),
                 column![
                     text("Architected using IFEM Doctrine")
                         .size(15)
@@ -790,15 +828,29 @@ impl Converter {
                     text("Learn more about Interface-First Engineering Methodology")
                         .size(13)
                         .color(p.muted),
-                    text("ifem.dev").size(13).color(p.primary),
+                    text(IFEM_DOCTRINE_LABEL).size(13).color(p.primary),
                 ]
-                .spacing(3),
+                .spacing(3)
+                .width(Length::Fill),
             ]
             .spacing(14)
             .align_y(iced::Alignment::Center),
         )
+        .on_press(Message::OpenIfemDoctrine)
         .padding(16)
-        .style(move |_| panel_style(p.surface, p.border));
+        .width(Length::Fill)
+        .style(move |_, _| link_card_style(p));
+
+        let footer = column![
+            text("© 2026 Soheil Mozaffari · All rights reserved.")
+                .size(12)
+                .color(p.muted),
+            text("Proprietary and source-available.")
+                .size(12)
+                .color(p.muted),
+        ]
+        .spacing(2)
+        .align_x(iced::Alignment::Center);
 
         let content = column![
             header,
@@ -807,7 +859,9 @@ impl Converter {
             badges,
             stack,
             developer,
-            doctrine
+            personal_site,
+            doctrine,
+            footer,
         ]
         .spacing(22)
         .align_x(iced::Alignment::Center)
@@ -865,6 +919,324 @@ impl Converter {
             .padding(28)
             .style(move |_| panel_style(p.surface, p.watermelon_red))
             .into()
+    }
+}
+
+fn horizontal_divider<'a>(p: Palette) -> Element<'a, Message> {
+    container(space::horizontal())
+        .width(Length::Fill)
+        .height(Length::Fixed(1.0))
+        .style(move |_| container::Style::default().background(p.border))
+        .into()
+}
+
+fn section_divider<'a>(label: &'a str, p: Palette) -> Element<'a, Message> {
+    row![
+        horizontal_divider(p),
+        text(label).size(12).color(p.muted),
+        horizontal_divider(p),
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn link_glyph<'a>(p: Palette) -> Element<'a, Message> {
+    container(text("↗").size(23).color(p.watermelon_red))
+        .width(Length::Fixed(38.0))
+        .height(Length::Fixed(38.0))
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(Background::Color(Color::from_rgba8(198, 40, 57, 0.16))),
+            border: Border::default().rounded(99.0),
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn ifem_mark<'a>() -> Element<'a, Message> {
+    canvas::Canvas::new(IfemMark)
+        .width(Length::Fixed(38.0))
+        .height(Length::Fixed(46.0))
+        .into()
+}
+
+fn link_card_style(p: Palette) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(p.surface)),
+        text_color: p.on_surface,
+        border: Border::default().rounded(18.0).width(1.0).color(p.border),
+        ..button::Style::default()
+    }
+}
+
+struct SplashScene {
+    progress: f32,
+}
+
+impl<Message> canvas::Program<Message> for SplashScene {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let progress = self.progress.clamp(0.0, 1.0);
+        let eased = 1.0 - (1.0 - progress).powi(3);
+        let pulse = 0.58 + 0.42 * ((progress * std::f32::consts::PI * 2.0).sin() + 1.0) / 2.0;
+        let width = bounds.width;
+        let height = bounds.height;
+        let unit = (width.min(height) / 680.0).clamp(0.64, 1.45);
+        let center_x = width / 2.0;
+        let artwork_y = height * 0.42;
+
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgb8(5, 12, 9));
+        frame.fill(
+            &canvas::Path::circle(Point::new(center_x, artwork_y), 260.0 * unit),
+            Color::from_rgba8(100, 211, 153, 0.06 + 0.12 * pulse),
+        );
+        frame.fill(
+            &canvas::Path::circle(
+                Point::new(center_x - 95.0 * unit, artwork_y + 50.0 * unit),
+                150.0 * unit,
+            ),
+            Color::from_rgba8(198, 40, 57, 0.03 + 0.05 * (1.0 - pulse)),
+        );
+
+        let scale = 0.72 + 0.28 * eased;
+        let alpha = eased;
+        let fruit_center = Point::new(center_x - 92.0 * unit, artwork_y + 16.0 * unit);
+        let fruit_width = 196.0 * unit * scale;
+        let fruit_height = 178.0 * unit * scale;
+        let base_y = fruit_center.y + fruit_height / 2.0;
+        let top_y = fruit_center.y - fruit_height / 2.0;
+        let left_x = fruit_center.x - fruit_width / 2.0;
+        let right_x = fruit_center.x + fruit_width / 2.0;
+
+        let rind = canvas::Path::new(|builder| {
+            builder.move_to(Point::new(left_x, base_y));
+            builder.line_to(Point::new(fruit_center.x, top_y));
+            builder.line_to(Point::new(right_x, base_y));
+            builder.close();
+        });
+        frame.fill(&rind, Color::from_rgba8(20, 122, 112, alpha));
+        let white_layer = canvas::Path::new(|builder| {
+            builder.move_to(Point::new(left_x + 11.0 * unit, base_y - 7.0 * unit));
+            builder.line_to(Point::new(fruit_center.x, top_y + 12.0 * unit));
+            builder.line_to(Point::new(right_x - 11.0 * unit, base_y - 7.0 * unit));
+            builder.close();
+        });
+        frame.fill(&white_layer, Color::from_rgba8(247, 250, 248, alpha));
+        let flesh = canvas::Path::new(|builder| {
+            builder.move_to(Point::new(left_x + 20.0 * unit, base_y - 15.0 * unit));
+            builder.line_to(Point::new(fruit_center.x, top_y + 22.0 * unit));
+            builder.line_to(Point::new(right_x - 20.0 * unit, base_y - 15.0 * unit));
+            builder.close();
+        });
+        frame.fill(&flesh, Color::from_rgba8(198, 40, 57, alpha));
+
+        for (x, y) in [
+            (-35.0, 18.0),
+            (0.0, -2.0),
+            (35.0, 18.0),
+            (-10.0, 45.0),
+            (20.0, 48.0),
+        ] {
+            frame.fill(
+                &canvas::Path::circle(
+                    Point::new(
+                        fruit_center.x + x * unit * scale,
+                        fruit_center.y + y * unit * scale,
+                    ),
+                    5.0 * unit * scale,
+                ),
+                Color::from_rgba8(5, 12, 9, alpha),
+            );
+        }
+
+        let arrow_y = artwork_y - 6.0 * unit;
+        let arrow_start = Point::new(center_x + 24.0 * unit, arrow_y);
+        let arrow_end = Point::new(center_x + 184.0 * unit, arrow_y);
+        frame.stroke(
+            &canvas::Path::line(arrow_start, arrow_end),
+            canvas::Stroke::default()
+                .with_width(9.0 * unit)
+                .with_color(Color::from_rgba8(100, 211, 153, alpha)),
+        );
+        let arrow_head = canvas::Path::new(|builder| {
+            builder.move_to(Point::new(
+                arrow_end.x - 16.0 * unit,
+                arrow_end.y - 38.0 * unit,
+            ));
+            builder.line_to(Point::new(arrow_end.x + 34.0 * unit, arrow_end.y));
+            builder.line_to(Point::new(
+                arrow_end.x - 16.0 * unit,
+                arrow_end.y + 38.0 * unit,
+            ));
+            builder.line_to(Point::new(
+                arrow_end.x - 5.0 * unit,
+                arrow_end.y + 12.0 * unit,
+            ));
+            builder.line_to(Point::new(
+                arrow_end.x - 66.0 * unit,
+                arrow_end.y + 12.0 * unit,
+            ));
+            builder.line_to(Point::new(
+                arrow_end.x - 66.0 * unit,
+                arrow_end.y - 12.0 * unit,
+            ));
+            builder.line_to(Point::new(
+                arrow_end.x - 5.0 * unit,
+                arrow_end.y - 12.0 * unit,
+            ));
+            builder.close();
+        });
+        frame.fill(&arrow_head, Color::from_rgba8(247, 250, 248, alpha));
+        frame.fill(
+            &canvas::Path::circle(Point::new(center_x + 104.0 * unit, arrow_y), 52.0 * unit),
+            Color::from_rgba8(100, 211, 153, 0.05 + 0.12 * pulse),
+        );
+
+        let title_y = artwork_y + 205.0 * unit;
+        frame.fill_text(canvas::Text {
+            content: "WATERMELON".to_owned(),
+            position: Point::new(center_x - 128.0 * unit, title_y),
+            color: Color::from_rgba8(247, 250, 248, alpha),
+            size: (32.0 * unit).into(),
+            ..canvas::Text::default()
+        });
+        frame.fill_text(canvas::Text {
+            content: "VECTOR GRAPHICS CONVERTER".to_owned(),
+            position: Point::new(center_x - 116.0 * unit, title_y + 28.0 * unit),
+            color: Color::from_rgba8(100, 211, 153, alpha),
+            size: (12.0 * unit).into(),
+            ..canvas::Text::default()
+        });
+        let bar_width = 176.0 * unit;
+        let bar_x = center_x - bar_width / 2.0;
+        let bar_y = title_y + 70.0 * unit;
+        frame.fill_rectangle(
+            Point::new(bar_x, bar_y),
+            Size::new(bar_width, 5.0 * unit),
+            Color::from_rgba8(247, 250, 248, 0.14),
+        );
+        frame.fill_rectangle(
+            Point::new(bar_x, bar_y),
+            Size::new(bar_width * eased, 5.0 * unit),
+            Color::from_rgba8(100, 211, 153, alpha),
+        );
+
+        vec![frame.into_geometry()]
+    }
+}
+
+struct IfemMark;
+
+impl<Message> canvas::Program<Message> for IfemMark {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let point =
+            |x: f32, y: f32| Point::new(bounds.width * x / 108.0, bounds.height * y / 132.0);
+        let navy = Color::from_rgb8(18, 53, 101);
+        let green = Color::from_rgb8(37, 141, 120);
+        let blue = Color::from_rgb8(46, 103, 181);
+        let gold = Color::from_rgb8(242, 165, 26);
+
+        for points in [
+            [
+                (8.0, 10.0),
+                (39.0, 10.0),
+                (39.0, 15.0),
+                (13.0, 15.0),
+                (13.0, 40.0),
+                (8.0, 40.0),
+            ],
+            [
+                (69.0, 10.0),
+                (100.0, 10.0),
+                (100.0, 40.0),
+                (95.0, 40.0),
+                (95.0, 15.0),
+                (69.0, 15.0),
+            ],
+            [
+                (8.0, 88.0),
+                (13.0, 88.0),
+                (13.0, 113.0),
+                (39.0, 113.0),
+                (39.0, 118.0),
+                (8.0, 118.0),
+            ],
+            [
+                (95.0, 88.0),
+                (100.0, 88.0),
+                (100.0, 118.0),
+                (69.0, 118.0),
+                (69.0, 113.0),
+                (95.0, 113.0),
+            ],
+        ] {
+            let path = canvas::Path::new(|builder| {
+                builder.move_to(point(points[0].0, points[0].1));
+                for (x, y) in points.iter().skip(1) {
+                    builder.line_to(point(*x, *y));
+                }
+                builder.close();
+            });
+            frame.fill(&path, navy);
+        }
+        for (top, color) in [(28.0, green), (56.0, blue), (84.0, gold)] {
+            let diamond = canvas::Path::new(|builder| {
+                builder.move_to(point(54.0, top));
+                builder.line_to(point(88.0, top + 17.0));
+                builder.line_to(point(54.0, top + 34.0));
+                builder.line_to(point(20.0, top + 17.0));
+                builder.close();
+            });
+            frame.fill(&diamond, color);
+        }
+        frame.stroke(
+            &canvas::Path::line(point(54.0, 22.0), point(54.0, 28.0)),
+            canvas::Stroke::default().with_width(2.5).with_color(navy),
+        );
+        frame.stroke(
+            &canvas::Path::line(point(54.0, 118.0), point(54.0, 124.0)),
+            canvas::Stroke::default().with_width(2.5).with_color(navy),
+        );
+        frame.fill(
+            &canvas::Path::circle(point(54.0, 13.0), bounds.width * 4.5 / 108.0),
+            green,
+        );
+        frame.fill(
+            &canvas::Path::circle(point(54.0, 129.0), bounds.width * 4.5 / 108.0),
+            gold,
+        );
+        for (y, color) in [(59.0, blue), (87.0, gold)] {
+            frame.fill(
+                &canvas::Path::circle(point(54.0, y), bounds.width * 5.0 / 108.0),
+                Color::WHITE,
+            );
+            frame.fill(
+                &canvas::Path::circle(point(54.0, y), bounds.width * 3.0 / 108.0),
+                color,
+            );
+        }
+        vec![frame.into_geometry()]
     }
 }
 
@@ -961,6 +1333,9 @@ pub enum Message {
     OpenAbout,
     CloseAbout,
     ToggleAppearance,
+    OpenPersonalWebsite,
+    OpenIfemDoctrine,
+    LinkOpenFinished,
     DirectionSelected(Direction),
     PickFileRequested,
     FilePicked(Option<PathBuf>),
@@ -973,6 +1348,15 @@ pub enum Message {
     OutputSaved(Result<Option<PathBuf>, String>),
     Reset,
     IcedEvent(iced::Event),
+}
+
+async fn open_url(url: &'static str) {
+    #[cfg(target_os = "windows")]
+    let _ = Command::new("cmd").args(["/C", "start", "", url]).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = Command::new("open").arg(url).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = Command::new("xdg-open").arg(url).spawn();
 }
 
 async fn pick_file() -> Option<PathBuf> {
