@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: all-platforms-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   desktop:
@@ -24,7 +24,7 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
           - name: macOS Intel
-            os: macos-13
+            os: macos-15-intel
             target: x86_64-apple-darwin
           - name: macOS Apple Silicon
             os: macos-14
