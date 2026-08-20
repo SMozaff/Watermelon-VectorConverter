@@ -17,6 +17,7 @@ import com.watermelon.converter.jni.SvgConverter
 import com.watermelon.converter.jni.userMessage
 import com.watermelon.converter.logging.AppLogger
 import com.watermelon.converter.util.OutputDestination
+import com.watermelon.converter.util.SafAccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,7 +74,15 @@ class BatchViewModel(
 
     /** ZIP document picker entry point: inspect first, never start native work immediately. */
     fun prepareZip(zipUri: Uri) {
-        prepareInput(inputLabel = zipUri.lastPathSegment ?: "Selected ZIP") { repo.readBytes(zipUri) }
+        SafAccess.persistReadGrant(getApplication(), zipUri)
+        prepareInput(zipUri.lastPathSegment ?: "Selected ZIP") { repo.readBytes(zipUri) }
+    }
+
+    fun prepareFolder(treeUri: Uri) {
+        SafAccess.persistReadGrant(getApplication(), treeUri)
+        prepareInput("Folder: ${SafAccess.folderDisplayName(getApplication(), treeUri)}") {
+            SafAccess.zipSupportedFolder(getApplication(), treeUri)
+        }
     }
 
     /** File-browser entry point: selected loose SVG files use the identical preflight contract. */

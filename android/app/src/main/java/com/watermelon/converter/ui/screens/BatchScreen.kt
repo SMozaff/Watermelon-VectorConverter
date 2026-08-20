@@ -60,8 +60,12 @@ fun BatchScreen(
     val onConfirm: () -> Unit = { if (reverse) revVm.confirmPreflight() else vm.confirmPreflight() }
     val onSaveReport: () -> Unit = { if (reverse) revVm.saveReport() else vm.saveReport() }
     val onPrepare: (android.net.Uri) -> Unit = { uri -> if (reverse) revVm.prepareZip(uri) else vm.prepareZip(uri) }
+    val onPrepareFolder: (android.net.Uri) -> Unit = { uri -> if (reverse) revVm.prepareFolder(uri) else vm.prepareFolder(uri) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) onPrepare(uri)
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) onPrepareFolder(uri)
     }
 
     Scaffold(
@@ -78,7 +82,11 @@ fun BatchScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             when (val current = state) {
-                BatchUiState.Idle -> BatchPicker(reverse) { picker.launch(arrayOf("application/zip", "application/octet-stream")) }
+                BatchUiState.Idle -> BatchPicker(
+                    reverse = reverse,
+                    onPickZip = { picker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                    onPickFolder = { folderPicker.launch(null) },
+                )
                 is BatchUiState.Preflight -> BatchPreflightCard(current.details, onConfirm, onReset)
                 is BatchUiState.Working -> BatchProgressCard(current.progress, onCancel)
                 is BatchUiState.Done -> BatchCompletionCard(current, reportSaveState, { nav.navigate(Routes.EXPORT) }, onSaveReport, onReset)
@@ -90,10 +98,11 @@ fun BatchScreen(
 }
 
 @Composable
-private fun BatchPicker(reverse: Boolean, onPick: () -> Unit) {
-    Text(if (reverse) "Choose a ZIP containing VectorDrawable XML files." else "Choose a ZIP containing SVG files.", style = MaterialTheme.typography.bodyLarge)
-    Text("Before conversion, Watermelon will show eligible files, exclusions, output name, and save location.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Button(onClick = onPick, modifier = Modifier.fillMaxWidth()) { Text("Choose ZIP file") }
+private fun BatchPicker(reverse: Boolean, onPickZip: () -> Unit, onPickFolder: () -> Unit) {
+    Text(if (reverse) "Choose a ZIP or folder containing VectorDrawable XML files." else "Choose a ZIP or folder containing SVG files.", style = MaterialTheme.typography.bodyLarge)
+    Text("Watermelon reads only the files you choose. Full-device storage access is not required for this batch.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Button(onClick = onPickZip, modifier = Modifier.fillMaxWidth()) { Text("Choose ZIP file") }
+    OutlinedButton(onClick = onPickFolder, modifier = Modifier.fillMaxWidth()) { Text("Choose folder") }
 }
 
 @Composable

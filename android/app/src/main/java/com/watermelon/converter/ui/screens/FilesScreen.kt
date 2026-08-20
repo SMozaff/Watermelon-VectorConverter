@@ -108,7 +108,10 @@ fun FilesScreen(
     val currentDir by vm.currentDir.collectAsState()
 
     if (!hasPermission) {
-        PermissionRationale(onGrant = { vm.openPermissionSettings() })
+        PermissionRationale(
+            onGrant = { vm.openPermissionSettings() },
+            onUseSystemPicker = { nav.navigate(com.watermelon.converter.Routes.PAGER) },
+        )
         return
     }
 
@@ -845,7 +848,7 @@ private fun RenameDialog(count: Int, onConfirm: (String) -> Unit, onDismiss: () 
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PermissionRationale(onGrant: () -> Unit) {
+private fun PermissionRationale(onGrant: () -> Unit, onUseSystemPicker: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
@@ -865,19 +868,20 @@ private fun PermissionRationale(onGrant: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Watermelon Vector Converter needs full storage access to find " +
-                    "SVG and XML files anywhere on your device \u2014 internal storage " +
-                    "and any SD card \u2014 in one grant.",
+                "Full-device browsing is optional. Grant access only if you want Watermelon " +
+                    "to search internal storage and SD cards in one browser. For ordinary " +
+                    "conversion, use the system file, ZIP, or folder picker instead.",
                 fontSize = 14.sp,
                 color = SlateGray,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(24.dp))
             Button(
-                onClick = onGrant,
+                onClick = onUseSystemPicker,
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(containerColor = FreshTeal),
-            ) { Text("Grant access") }
+            ) { Text("Use system picker") }
+            TextButton(onClick = onGrant) { Text("Enable full-device browser") }
         }
     }
 }

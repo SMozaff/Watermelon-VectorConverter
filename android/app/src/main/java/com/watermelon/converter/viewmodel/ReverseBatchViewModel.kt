@@ -17,6 +17,7 @@ import com.watermelon.converter.jni.SvgConverter
 import com.watermelon.converter.jni.userMessage
 import com.watermelon.converter.logging.AppLogger
 import com.watermelon.converter.util.OutputDestination
+import com.watermelon.converter.util.SafAccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,7 +51,15 @@ class ReverseBatchViewModel(
     private suspend fun outputDestUri(): String? = settingsRepo.settings.first().outputDestinationUri
 
     fun prepareZip(zipUri: Uri) {
+        SafAccess.persistReadGrant(getApplication(), zipUri)
         prepareInput(zipUri.lastPathSegment ?: "Selected ZIP") { repo.readBytes(zipUri) }
+    }
+
+    fun prepareFolder(treeUri: Uri) {
+        SafAccess.persistReadGrant(getApplication(), treeUri)
+        prepareInput("Folder: ${SafAccess.folderDisplayName(getApplication(), treeUri)}") {
+            SafAccess.zipSupportedFolder(getApplication(), treeUri)
+        }
     }
 
     fun prepareLooseFiles(files: List<File>) {

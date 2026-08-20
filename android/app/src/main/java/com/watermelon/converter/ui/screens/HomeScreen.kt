@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -26,6 +27,7 @@ import com.watermelon.converter.Routes
 import com.watermelon.converter.ui.sharedGraphViewModel
 import com.watermelon.converter.viewmodel.ConversionViewModel
 import com.watermelon.converter.viewmodel.ReverseConversionViewModel
+import com.watermelon.converter.util.SafAccess
 
 /** A task-first landing surface for single and batch vector conversion. */
 @Composable
@@ -34,6 +36,7 @@ fun HomeScreen(
     convVm: ConversionViewModel = nav.sharedGraphViewModel(),
     revConvVm: ReverseConversionViewModel = nav.sharedGraphViewModel(),
 ) {
+    val context = LocalContext.current
     val openPreview = remember(nav) {
         {
             nav.navigate(Routes.PREVIEW) {
@@ -45,6 +48,7 @@ fun HomeScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
+            SafAccess.persistReadGrant(context, uri)
             revConvVm.reset()
             convVm.convert(uri)
             openPreview()
@@ -54,6 +58,7 @@ fun HomeScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
+            SafAccess.persistReadGrant(context, uri)
             convVm.reset()
             revConvVm.convert(uri)
             openPreview()
