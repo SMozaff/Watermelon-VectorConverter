@@ -48,6 +48,7 @@ import com.watermelon.converter.ui.components.FolderIcon
 import com.watermelon.converter.ui.components.VectorPropertiesPanel
 import com.watermelon.converter.ui.components.WatermelonLoader
 import com.watermelon.converter.ui.theme.*
+import com.watermelon.converter.viewmodel.FileBrowserBatchState
 import com.watermelon.converter.viewmodel.FileManagerViewModel
 import com.watermelon.converter.viewmodel.PreviewState
 import com.watermelon.converter.viewmodel.RowNode
@@ -75,13 +76,11 @@ fun FilesScreen(
     val settings by settingsVm.settings.collectAsState()
     val rows by vm.rows.collectAsState()
     val filter by vm.filter.collectAsState()
-    val marked by vm.marked.collectAsState()
     val preview by vm.preview.collectAsState()
     val previewedFile by vm.previewedFile.collectAsState()
     val query by vm.query.collectAsState()
     val searchResults by vm.searchResults.collectAsState()
-    val converting by vm.converting.collectAsState()
-    val convertResult by vm.convertResult.collectAsState()
+    val fileBatch by vm.fileBatch.collectAsState()
     val selectionMode by vm.selectionMode.collectAsState()
     val selected by vm.selected.collectAsState()
     val opStatus by vm.opStatus.collectAsState()
@@ -142,6 +141,7 @@ fun FilesScreen(
                     onFilterChange = { svg, xml -> vm.setFilter(svg, xml) },
                     showBack = currentDir != null,
                     onBack = { vm.goToStorageRoot() },
+                    onStartBatchSelection = { vm.startBatchSelection() },
                 )
             }
 
@@ -193,7 +193,6 @@ fun FilesScreen(
                                     FileRow(
                                         row = row,
                                         node = node,
-                                        isMarked = marked.contains(node.absolutePath),
                                         isSelected = selected.contains(node.absolutePath),
                                         selectionMode = selectionMode,
                                         onTap = {
@@ -223,51 +222,24 @@ fun FilesScreen(
                 HorizontalDivider(color = Color(0xFFE2E8F0))
                 PreviewPane(
                     state = preview,
-                    isMarkable = previewedFile?.kind == FileKind.Svg,
-                    isMarked = previewedFile?.let { marked.contains(it.absolutePath) } ?: false,
-                    onToggleMark = { vm.toggleMarkPreviewed() },
                     onExpand = { fullScreen = true },
                     onClose = { vm.closePreview() },
                     properties = properties,
                     showProperties = settings.showFileProperties,
                 )
             }
-
-            // ── Marked action bar ──
-            if (!selectionMode && marked.isNotEmpty()) {
-                MarkedBar(
-                    count = marked.size,
-                    converting = converting,
-                    onClear = { vm.clearMarks() },
-                    onConvert = { vm.convertMarked() },
-                )
-            }
         }
 
-        // ── FAB ──
-        if (selectionMode && selected.isNotEmpty()) {
+        if (selectionMode && selected.isNotEmpty() && fileBatch is com.watermelon.converter.viewmodel.FileBrowserBatchState.Idle) {
             Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.BottomEnd) {
                 FileOpsFab(
-                    onZipShip = { vm.zipAndShipSelected() },
+                    onConvertSvg = { vm.prepareSelectedBatch(com.watermelon.converter.viewmodel.FileBatchDirection.SvgToVector) },
+                    onConvertXml = { vm.prepareSelectedBatch(com.watermelon.converter.viewmodel.FileBatchDirection.VectorToSvg) },
                     onMove = { pendingMove = true; showFolderChooser = true },
                     onCopy = { pendingMove = false; showFolderChooser = true },
                     onRename = { showRenameDialog = true },
                     onDelete = { showDeleteConfirm = true },
                 )
-            }
-        }
-
-        // ── Converting overlay ──
-        if (converting) {
-            Box(
-                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    WatermelonLoader(size = 72.dp)
-                    Spacer(Modifier.height(12.dp))
-                    Text("Converting…", color = PureWhite, fontWeight = FontWeight.SemiBold)
-                }
             }
         }
     }
@@ -277,21 +249,7 @@ fun FilesScreen(
         FullScreenPreview(state = preview, onClose = { fullScreen = false })
     }
 
-    // ── Dialogs ──
-    convertResult?.let { result ->
-        AlertDialog(
-            onDismissRequest = { vm.dismissConvertResult() },
-            title = { Text("Conversion complete") },
-            text = {
-                Column {
-                    Text("${result.succeeded} succeeded, ${result.failed} failed.")
-                    Spacer(Modifier.height(8.dp))
-                    Text("Saved to:\n${result.savedTo}", style = MaterialTheme.typography.labelLarge, color = SlateGray)
-                }
-            },
-            confirmButton = { TextButton(onClick = { vm.dismissConvertResult() }) { Text("OK") } },
-        )
-    }
+    FileBrowserBatchDialog(state = fileBatch, vm = vm)
 
     if (showRenameDialog) {
         RenameDialog(
@@ -326,6 +284,76 @@ fun FilesScreen(
     }
 }
 
+@Composable
+private fun FileBrowserBatchDialog(state: FileBrowserBatchState, vm: FileManagerViewModel) {
+    when (state) {
+        FileBrowserBatchState.Idle -> Unit
+        is FileBrowserBatchState.Preflight -> AlertDialog(
+            onDismissRequest = { vm.dismissFileBatch() },
+            title = { Text("Review batch") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(state.details.direction.label, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text("${state.details.eligibleFiles.size} eligible of ${state.details.selectedCount} selected")
+                    Text("Input size: ${fmtSize(state.details.inputBytes)}")
+                    Text("Output: ${state.details.outputName}", style = MaterialTheme.typography.bodySmall)
+                    Text("Save to: ${state.details.destinationLabel}", style = MaterialTheme.typography.bodySmall)
+                    if (state.details.rejected.isNotEmpty()) {
+                        Text("${state.details.rejected.size} file${if (state.details.rejected.size == 1) " is" else "s are"} excluded", color = MaterialTheme.colorScheme.error)
+                        state.details.rejected.take(4).forEach { item -> Text("• ${item.name}: ${item.reason}", style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.confirmSelectedBatch() }, enabled = state.details.eligibleFiles.isNotEmpty()) { Text("Convert") } },
+            dismissButton = { TextButton(onClick = { vm.dismissFileBatch() }) { Text("Back to selection") } },
+        )
+        is FileBrowserBatchState.Working -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Converting batch") },
+            text = {
+                val progress = state.progress
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (progress == null) {
+                        CircularProgressIndicator()
+                        Text("Preparing selected files…")
+                    } else {
+                        LinearProgressIndicator(progress = { progress.totalFraction }, modifier = Modifier.fillMaxWidth())
+                        Text("${progress.done} of ${progress.total}: ${progress.currentName}")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.cancelSelectedBatch() }) { Text("Cancel") } },
+        )
+        is FileBrowserBatchState.Done -> AlertDialog(
+            onDismissRequest = { vm.dismissFileBatch() },
+            title = { Text("Batch complete") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${state.report.succeeded} succeeded · ${state.report.failed} failed", color = MaterialTheme.colorScheme.primary)
+                    Text("Saved: ${state.savedTo}", style = MaterialTheme.typography.bodySmall)
+                    if (state.report.failed > 0) state.report.rejected.forEach { failure ->
+                        Text("• ${failure.name}: ${failure.errorMessage ?: "Unknown reason"}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.dismissFileBatch() }) { Text("Start another batch") } },
+        )
+        is FileBrowserBatchState.Cancelled -> FileBrowserBatchRecoveryDialog("Batch cancelled", state.message, vm)
+        is FileBrowserBatchState.Failed -> FileBrowserBatchRecoveryDialog("Batch needs attention", state.message, vm)
+    }
+}
+
+@Composable
+private fun FileBrowserBatchRecoveryDialog(title: String, message: String, vm: FileManagerViewModel) {
+    AlertDialog(
+        onDismissRequest = { vm.dismissFileBatch() },
+        title = { Text(title) },
+        text = { Text(message, color = MaterialTheme.colorScheme.error) },
+        confirmButton = { TextButton(onClick = { vm.retrySelectedBatch() }) { Text("Review and retry") } },
+        dismissButton = { TextButton(onClick = { vm.dismissFileBatch() }) { Text("Choose another batch") } },
+    )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Top bars
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,6 +367,7 @@ private fun FilesTopBar(
     onFilterChange: (Boolean, Boolean) -> Unit,
     showBack: Boolean,
     onBack: () -> Unit,
+    onStartBatchSelection: () -> Unit,
 ) {
     Column(
         Modifier
@@ -362,6 +391,9 @@ private fun FilesTopBar(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
             )
+            TextButton(onClick = onStartBatchSelection, modifier = Modifier.align(Alignment.CenterEnd)) {
+                Text("Batch select", color = FreshTeal, fontWeight = FontWeight.SemiBold)
+            }
         }
         Spacer(Modifier.height(12.dp))
 
@@ -466,7 +498,6 @@ private fun SelectionTopBar(
 private fun FileRow(
     row: TreeRow,
     node: FileNode,
-    isMarked: Boolean,
     isSelected: Boolean,
     selectionMode: Boolean,
     onTap: () -> Unit,
@@ -481,11 +512,7 @@ private fun FileRow(
             .fillMaxWidth()
             .combinedClickable(onClick = onTap, onLongClick = onLongPress)
             .background(
-                when {
-                    isSelected -> FreshTeal.copy(alpha = 0.10f)
-                    isMarked -> WatermelonRed.copy(alpha = 0.06f)
-                    else -> Color.Transparent
-                }
+                if (isSelected) FreshTeal.copy(alpha = 0.10f) else Color.Transparent
             )
             .padding(start = 16.dp + indentDp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -533,17 +560,6 @@ private fun FileRow(
                 color = SlateGray,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        // Marked = red bookmark (queued for conversion).
-        // Visually distinct from selection (teal checkbox).
-        if (isMarked) {
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "\uD83D\uDD16",
-                fontSize = 18.sp,
-                color = WatermelonRed,
             )
         }
 
@@ -609,45 +625,14 @@ private fun StorageRootRow(storageRoot: StorageRoot, onTap: () -> Unit) {
 // Bottom bars
 // ─────────────────────────────────────────────────────────────────────────────
 
-@Composable
-private fun MarkedBar(count: Int, converting: Boolean, onClear: () -> Unit, onConvert: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "$count marked for conversion",
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onClear, enabled = !converting) {
-            Text("Clear", color = SlateGray)
-        }
-        Spacer(Modifier.width(8.dp))
-        Button(
-            onClick = onConvert,
-            enabled = !converting,
-            shape = RoundedCornerShape(50),
-            colors = ButtonDefaults.buttonColors(containerColor = WatermelonRed),
-        ) {
-            if (converting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = PureWhite)
-            else Text("Convert", color = PureWhite, fontWeight = FontWeight.Bold)
-        }
-    }
-    HorizontalDivider(color = Color(0xFFE2E8F0))
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // FAB
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun FileOpsFab(
-    onZipShip: () -> Unit,
+    onConvertSvg: () -> Unit,
+    onConvertXml: () -> Unit,
     onMove: () -> Unit,
     onCopy: () -> Unit,
     onRename: () -> Unit,
@@ -662,7 +647,8 @@ private fun FileOpsFab(
             shape = CircleShape,
         ) { Text("+", fontSize = 24.sp, fontWeight = FontWeight.Light) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Zip & Ship (convert)") }, onClick = { open = false; onZipShip() })
+            DropdownMenuItem(text = { Text("Convert SVG → XML") }, onClick = { open = false; onConvertSvg() })
+            DropdownMenuItem(text = { Text("Convert XML → SVG") }, onClick = { open = false; onConvertXml() })
             DropdownMenuItem(text = { Text("Move…") }, onClick = { open = false; onMove() })
             DropdownMenuItem(text = { Text("Copy…") }, onClick = { open = false; onCopy() })
             DropdownMenuItem(text = { Text("Rename…") }, onClick = { open = false; onRename() })
@@ -678,9 +664,6 @@ private fun FileOpsFab(
 @Composable
 private fun PreviewPane(
     state: PreviewState,
-    isMarkable: Boolean,
-    isMarked: Boolean,
-    onToggleMark: () -> Unit,
     onExpand: () -> Unit,
     onClose: () -> Unit,
     properties: com.watermelon.converter.data.model.VectorProperties? = null,
@@ -708,15 +691,6 @@ private fun PreviewPane(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (isMarkable) {
-                TextButton(onClick = onToggleMark) {
-                    Text(
-                        if (isMarked) "🔖 Marked" else "🔖 Mark",
-                        fontSize = 13.sp,
-                        color = if (isMarked) WatermelonRed else SlateGray,
-                    )
-                }
-            }
             TextButton(onClick = onExpand) { Text("Expand", fontSize = 13.sp, color = FreshTeal) }
             TextButton(onClick = onClose) { Text("Close", fontSize = 13.sp, color = SlateGray) }
         }
