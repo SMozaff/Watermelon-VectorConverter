@@ -72,8 +72,9 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Image(
                 painter = painterResource(id = R.drawable.we_stand_with_watermelon),
@@ -81,7 +82,10 @@ fun HomeScreen(
                 modifier = Modifier.size(72.dp),
                 contentScale = ContentScale.Fit,
             )
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
                     "Watermelon",
                     style = MaterialTheme.typography.headlineSmall,
@@ -97,6 +101,28 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ifem_mark),
+                        contentDescription = "IFEM — Interface-First Engineering Methodology",
+                        modifier = Modifier.size(width = 18.dp, height = 26.dp),
+                        contentScale = ContentScale.Fit,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("IFEM", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text("Built with", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
 
