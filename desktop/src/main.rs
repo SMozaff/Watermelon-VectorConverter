@@ -2,7 +2,9 @@
 // Copyright (c) 2026 Suhail Muzaffari. All rights reserved.
 //
 // Single binary, two modes:
-//   - No file argument (or an unrecognized flag) -> full converter UI.
+//   - No file argument (or an unrecognized flag) -> full converter UI (and,
+//     on Windows, (re-)registers the .svg/.xml file associations — see
+//     file_assoc/).
 //   - One argument that is an existing .svg/.xml file path -> lightweight
 //     viewer mode, opened by double-clicking a file via the OS file
 //     association (see file_assoc/).
@@ -14,9 +16,8 @@
 // actual point of this rewrite) no WebView2/WebKitGTK dependency anywhere.
 
 mod app;
-// file_assoc module lands in a later phase — porting the existing
-// Windows registry / Linux xdg-mime / macOS LaunchServices code.
-// mod file_assoc;
+#[cfg(windows)]
+mod file_assoc;
 mod single_instance;
 
 use std::path::PathBuf;
@@ -41,6 +42,20 @@ fn main() -> iced::Result {
             }
             app::run_viewer(path)
         }
-        None => app::run_converter(),
+        None => {
+            // Converter-mode startup (launched from the Start Menu, not
+            // via a file association) is also where file-association
+            // registration runs — idempotent, so re-running it on every
+            // ordinary launch is harmless, and this avoids needing a
+            // separate MSI custom action or first-run flag. Best-effort:
+            // a registration failure (e.g. no write access in some
+            // locked-down environment) is logged, not fatal — the
+            // converter itself doesn't depend on the association existing.
+            #[cfg(windows)]
+            if let Err(e) = file_assoc::register_current_exe() {
+                eprintln!("Watermelon: file association registration failed: {e}");
+            }
+            app::run_converter()
+        }
     }
 }

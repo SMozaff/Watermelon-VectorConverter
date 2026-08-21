@@ -22,11 +22,14 @@
       into a single installer),
     - add a Start Menu shortcut using the Watermelon icon,
     - set the Add/Remove Programs icon,
-    - rename the product from the crate name to the real product name.
-
-  TODO(file_assoc): once the desktop/src/file_assoc module lands (currently
-  deferred — see desktop/src/main.rs), register .svg/.xml file associations
-  here via a <ProgIcon>/<Extension> block under a new Component.
+    - rename the product from the crate name to the real product name,
+    - install watermelon_svg.ico / watermelon_xml.ico alongside the
+      binaries, for the per-file-type icons registered by
+      desktop/src/file_assoc/mod.rs (that module writes the actual
+      registry associations at runtime on first ordinary launch — this
+      installer's job is only to make sure the two .ico files exist next
+      to wvgc-desktop.exe for it to point at, not to write the
+      associations itself).
 -->
 
 <?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
@@ -94,6 +97,35 @@
                                 Source='$(var.CargoTargetBinDir)\wvgc-cli.exe'
                                 KeyPath='yes'/>
                         </Component>
+                        <!-- Per-file-type icons for file_assoc/mod.rs's
+                             registered associations. Installed next to the
+                             exe (file_assoc::register_current_exe resolves
+                             these paths relative to std::env::current_exe,
+                             i.e. this same Bin directory) rather than
+                             embedded as exe resources, so no rebuild of
+                             wvgc-desktop.exe itself is needed if an icon
+                             is ever swapped later — same reasoning as
+                             keeping ProductICO's source file external
+                             below. Absolute paths via WiX environment-
+                             variable references, for the same
+                             candle/light working-directory-ambiguity
+                             reason ProductICO's SourceFile below uses one. -->
+                        <Component Id='binaryIconSvg' Guid='*'>
+                            <File
+                                Id='iconSvg'
+                                Name='watermelon_svg.ico'
+                                DiskId='1'
+                                Source='$(env.WATERMELON_ICON_SVG_ICO)'
+                                KeyPath='yes'/>
+                        </Component>
+                        <Component Id='binaryIconXml' Guid='*'>
+                            <File
+                                Id='iconXml'
+                                Name='watermelon_xml.ico'
+                                DiskId='1'
+                                Source='$(env.WATERMELON_ICON_XML_ICO)'
+                                KeyPath='yes'/>
+                        </Component>
                     </Directory>
                 </Directory>
             </Directory>
@@ -133,6 +165,8 @@
 
             <ComponentRef Id='binary0'/>
             <ComponentRef Id='binary1'/>
+            <ComponentRef Id='binaryIconSvg'/>
+            <ComponentRef Id='binaryIconXml'/>
             <ComponentRef Id='ApplicationShortcut'/>
 
             <Feature

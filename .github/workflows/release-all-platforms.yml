@@ -77,6 +77,8 @@ jobs:
         run: cargo wix -p wvgc-desktop --nocapture --target ${{ matrix.target }}
         env:
           WATERMELON_ICON_ICO: ${{ github.workspace }}\icons\watermelon.ico
+          WATERMELON_ICON_SVG_ICO: ${{ github.workspace }}\icons\watermelon_svg.ico
+          WATERMELON_ICON_XML_ICO: ${{ github.workspace }}\icons\watermelon_xml.ico
 
       - name: Rename MSI
         if: runner.os == 'Windows'

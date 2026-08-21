@@ -12,9 +12,22 @@
 // rather than attempted.
 
 use iced::widget::{button, center, column, container, image, row, space, text};
-use iced::{window, Element, Length, Subscription, Task};
+use iced::{mouse, window, Element, Length, Subscription, Task};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+/// Zoom bounds and per-notch step for mouse-wheel zoom. A single wheel
+/// "click" is almost always reported as ScrollDelta::Lines{y: ±1.0} by the
+/// underlying winit backend, so a fixed additive step per whole line (rather
+/// than a multiplicative one) keeps a single notch feeling like a single,
+/// predictable increment regardless of the current zoom level.
+const ZOOM_MIN: f32 = 0.25;
+const ZOOM_MAX: f32 = 8.0;
+const ZOOM_STEP_PER_LINE: f32 = 0.1;
+/// Trackpads and some mice report ScrollDelta::Pixels instead of Lines; this
+/// converts a pixel delta into an equivalent step so both input types feel
+/// similarly paced (rough parity with a ~120-units-per-notch wheel).
+const ZOOM_STEP_PER_PIXEL: f32 = ZOOM_STEP_PER_LINE / 120.0;
 
 use svg_converter_core::animation::{detect_animation, AnimationKind, FileKind};
 
@@ -51,6 +64,7 @@ enum ViewState {
     Static {
         name: String,
         handle: image::Handle,
+        zoom: f32,
     },
     Avd {
         name: String,
@@ -58,6 +72,7 @@ enum ViewState {
         frame_durations_ms: Vec<u32>,
         current: usize,
         elapsed_in_frame: Duration,
+        zoom: f32,
     },
     Unsupported {
         name: String,
@@ -94,9 +109,13 @@ impl Viewer {
             Message::OpenFilePicked(None) => {}
             Message::FileLoaded(Ok(loaded)) => {
                 self.state = match loaded {
+                    // A freshly opened file always starts at 1.0 (fit-to-
+                    // window via ContentFit::Contain) rather than carrying
+                    // over the previous file's zoom level.
                     LoadedFile::Static { name, png } => ViewState::Static {
                         name,
                         handle: image::Handle::from_bytes(png),
+                        zoom: 1.0,
                     },
                     LoadedFile::Avd {
                         name,
@@ -110,6 +129,7 @@ impl Viewer {
                             frame_durations_ms,
                             current: 0,
                             elapsed_in_frame: Duration::ZERO,
+                            zoom: 1.0,
                         }
                     }
                     LoadedFile::UnsupportedAnimatedSvg { name } => ViewState::Unsupported { name },
@@ -152,6 +172,23 @@ impl Viewer {
                 self.state = ViewState::Loading;
                 return Task::perform(load_file(path), Message::FileLoaded);
             }
+            Message::IcedEvent(iced::Event::Mouse(mouse::Event::WheelScrolled { delta })) => {
+                // Only Static/Avd actually show an image to zoom; any other
+                // state (Loading/Unsupported/Error) has no image and simply
+                // ignores wheel input rather than erroring.
+                let zoom_ref = match &mut self.state {
+                    ViewState::Static { zoom, .. } => Some(zoom),
+                    ViewState::Avd { zoom, .. } => Some(zoom),
+                    _ => None,
+                };
+                if let Some(zoom) = zoom_ref {
+                    let step = match delta {
+                        mouse::ScrollDelta::Lines { y, .. } => y * ZOOM_STEP_PER_LINE,
+                        mouse::ScrollDelta::Pixels { y, .. } => y * ZOOM_STEP_PER_PIXEL,
+                    };
+                    *zoom = (*zoom + step).clamp(ZOOM_MIN, ZOOM_MAX);
+                }
+            }
             Message::IcedEvent(_) => {}
         }
         Task::none()
@@ -160,13 +197,20 @@ impl Viewer {
     pub fn view(&self) -> Element<'_, Message> {
         let content: Element<'_, Message> = match &self.state {
             ViewState::Loading => center(text("Loading…")).into(),
-            ViewState::Static { handle, .. } => center(
-                image(handle.clone()).content_fit(iced::ContentFit::Contain),
+            ViewState::Static { handle, zoom, .. } => center(
+                image(handle.clone())
+                    .content_fit(iced::ContentFit::Contain)
+                    .scale(*zoom),
             )
             .into(),
-            ViewState::Avd { handles, current, .. } => {
+            ViewState::Avd { handles, current, zoom, .. } => {
                 let handle = handles.get(*current).cloned().unwrap_or_else(|| handles[0].clone());
-                center(image(handle).content_fit(iced::ContentFit::Contain)).into()
+                center(
+                    image(handle)
+                        .content_fit(iced::ContentFit::Contain)
+                        .scale(*zoom),
+                )
+                .into()
             }
             ViewState::Unsupported { .. } => center(
                 column![
@@ -197,13 +241,21 @@ impl Viewer {
             | ViewState::Unsupported { name, .. } => name.as_str(),
             _ => "",
         };
+        let zoom_label = match &self.state {
+            ViewState::Static { zoom, .. } | ViewState::Avd { zoom, .. } => {
+                Some(format!("{:.0}%", zoom * 100.0))
+            }
+            _ => None,
+        };
 
         column![
             row![
                 text(name).size(13),
                 space::horizontal(),
+                text(zoom_label.unwrap_or_default()).size(12),
                 button("Open…").on_press(Message::OpenFileRequested),
             ]
+            .spacing(10)
             .padding(10)
             .align_y(iced::Alignment::Center),
             container(content).width(Length::Fill).height(Length::Fill),

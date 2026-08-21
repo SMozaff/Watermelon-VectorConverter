@@ -82,6 +82,8 @@ jobs:
         working-directory: desktop
         env:
           WATERMELON_ICON_ICO: ${{ github.workspace }}\icons\watermelon.ico
+          WATERMELON_ICON_SVG_ICO: ${{ github.workspace }}\icons\watermelon_svg.ico
+          WATERMELON_ICON_XML_ICO: ${{ github.workspace }}\icons\watermelon_xml.ico
         run: cargo wix --package wvgc-desktop --target ${{ matrix.target }} --nocapture
 
       - name: Rename MSI
