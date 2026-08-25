@@ -30,10 +30,23 @@
             </intent-filter>
         </activity>
     
-        <!-- SVG/VectorDrawable viewer -->
+        <!-- SVG/VectorDrawable viewer. Distinct label (not @string/app_name)
+             so it identifies itself as the viewer, not the converter, in
+             the "Open with" chooser, recents, and the app switcher.
+             taskAffinity + excludeFromRecents keep it in its own task,
+             separate from MainActivity's task: without this, launching the
+             viewer via VIEW when the converter's task already exists (e.g.
+             it was opened earlier and is just backgrounded) stacks the
+             viewer on top of that same task, so closing the viewer lands
+             back on the converter instead of returning to whatever app
+             the file was opened from. -->
         <activity
             android:name=".ui.viewer.SvgViewerActivity"
             android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/viewer_app_name"
+            android:taskAffinity="com.watermelon.converter.viewer"
+            android:excludeFromRecents="true"
             android:theme="@style/Theme.Watermelon">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

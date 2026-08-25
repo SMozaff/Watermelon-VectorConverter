@@ -6,6 +6,7 @@
 package com.watermelon.converter.ui.screens
 
 import android.graphics.BitmapFactory
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -71,9 +72,7 @@ private fun fmtSize(b: Long) = when {
 fun FilesScreen(
     nav: NavController,
     vm: FileManagerViewModel = viewModel(),
-    settingsVm: com.watermelon.converter.viewmodel.SettingsViewModel = viewModel(),
 ) {
-    val settings by settingsVm.settings.collectAsState()
     val rows by vm.rows.collectAsState()
     val filter by vm.filter.collectAsState()
     val preview by vm.preview.collectAsState()
@@ -95,6 +94,13 @@ fun FilesScreen(
     var showFolderChooser by remember { mutableStateOf(false) }
 
     val hasPermission by vm.hasPermission.collectAsState()
+
+    // Back press while files are selected exits selection instead of
+    // falling through to default navigation (parent folder / previous
+    // screen). Only intercepts while selectionMode is true — enabled=false
+    // lets the system handle back normally the rest of the time (see
+    // androidx.activity.compose.BackHandler's `enabled` param).
+    BackHandler(enabled = selectionMode) { vm.exitSelection() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -228,7 +234,6 @@ fun FilesScreen(
                     onExpand = { fullScreen = true },
                     onClose = { vm.closePreview() },
                     properties = properties,
-                    showProperties = settings.showFileProperties,
                 )
             }
         }
@@ -670,8 +675,13 @@ private fun PreviewPane(
     onExpand: () -> Unit,
     onClose: () -> Unit,
     properties: com.watermelon.converter.data.model.VectorProperties? = null,
-    showProperties: Boolean = true,
 ) {
+    val previewKey = when (state) {
+        is PreviewState.SvgImage -> state.name
+        is PreviewState.Failed -> state.name
+        else -> null
+    }
+    var propertiesExpanded by remember(previewKey) { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -718,11 +728,26 @@ private fun PreviewPane(
                 }
             }
         }
-        if (showProperties && properties != null) {
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = Color(0xFFE2E8F0))
+        if (properties != null) {
             Spacer(Modifier.height(8.dp))
-            VectorPropertiesPanel(properties)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "File properties",
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { propertiesExpanded = !propertiesExpanded }) {
+                    Text(if (propertiesExpanded) "Collapse" else "Details", fontSize = 13.sp, color = FreshTeal)
+                }
+            }
+            if (propertiesExpanded) {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(color = Color(0xFFE2E8F0))
+                Spacer(Modifier.height(8.dp))
+                VectorPropertiesPanel(properties)
+            }
         }
     }
 }

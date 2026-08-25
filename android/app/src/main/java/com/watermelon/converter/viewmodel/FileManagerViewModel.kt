@@ -14,8 +14,10 @@ import com.watermelon.converter.data.files.TypeFilter
 import com.watermelon.converter.data.prefs.SettingsRepository
 import com.watermelon.converter.data.model.BatchReport
 import com.watermelon.converter.data.model.FileOutcome
+import com.watermelon.converter.jni.ConversionException
 import com.watermelon.converter.jni.RealSvgConverter
 import com.watermelon.converter.jni.SvgConverter
+import com.watermelon.converter.jni.userMessage
 import com.watermelon.converter.logging.AppLogger
 import com.watermelon.converter.util.OutputDestination
 import com.watermelon.converter.util.StoragePermission
@@ -178,7 +180,9 @@ class FileManagerViewModel(
                         } }
                         val analyze = withContext(Dispatchers.IO) { async {
                             runCatching {
-                                com.watermelon.converter.data.model.VectorProperties.fromJson(node.name, native.analyzeVector(bytes))
+                                val json = if (node.kind == FileKind.Svg) native.analyzeVector(bytes)
+                                           else native.analyzeVdVector(bytes)
+                                com.watermelon.converter.data.model.VectorProperties.fromJson(node.name, json)
                             }.onFailure { AppLogger.logError("FileManager", "analysis failed for ${node.name}", it) }.getOrNull()
                         } }
                         _preview.value = PreviewState.SvgImage(node.name, render.await())
@@ -186,6 +190,21 @@ class FileManagerViewModel(
                     }
                     else -> _preview.value = PreviewState.Empty
                 }
+            } catch (e: ConversionException) {
+                // Route through the same frozen-code -> friendly-string
+                // mapping ReverseConversionViewModel already uses (see
+                // jni/ErrorMessages.kt), instead of surfacing e.message
+                // directly. e.message is the raw Rust Display text (e.g.
+                // "[1001] invalid SVG: root is not <vector>"), which always
+                // says "invalid SVG" even when code 1001 came from the
+                // VectorDrawable parser rejecting an .xml file that isn't a
+                // <vector> — misleading for the exact case that matters
+                // most here, since Files-tab preview runs on both SVG and
+                // XML nodes. userMessage() already maps 1001 to a
+                // format-neutral string ("The SVG file could not be read
+                // or is malformed.") that doesn't misname the format.
+                AppLogger.logError("FileManager", "preview failed for ${node.name}", e)
+                _preview.value = PreviewState.Failed(node.name, e.userMessage(getApplication()))
             } catch (e: Exception) {
                 AppLogger.logError("FileManager", "preview failed for ${node.name}", e)
                 _preview.value = PreviewState.Failed(node.name, e.message ?: "Preview failed")

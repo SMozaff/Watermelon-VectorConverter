@@ -2,8 +2,9 @@
 <!-- Copyright (c) 2026 Suhail Muzaffari. All rights reserved. -->
 <resources>
     <string name="app_name">Watermelon Vector Converter</string>
+    <string name="viewer_app_name">Watermelon Vector Graphics Viewer</string>
     <!-- C-4 error code messages -->
-    <string name="err_1001_invalid_svg">The SVG file could not be read or is malformed.</string>
+    <string name="err_1001_invalid_svg">The file could not be read or is not a valid vector file for its type.</string>
     <string name="err_1002_unsupported">This SVG uses a feature that isn\'t supported yet (e.g. gradient, filter, text).</string>
     <string name="err_1003_zip_read">The ZIP archive is corrupt or unreadable.</string>
     <string name="err_1004_zip_write">The output ZIP could not be written.</string>
