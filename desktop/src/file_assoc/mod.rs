@@ -71,7 +71,13 @@ pub fn register(exe_path: &Path, svg_icon: &Path, xml_icon: &Path) -> io::Result
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let classes = hkcu.create_subkey("Software\\Classes")?.0;
 
-    register_prog_id(&classes, SVG_PROG_ID, "Watermelon SVG Viewer", exe_path, svg_icon)?;
+    register_prog_id(
+        &classes,
+        SVG_PROG_ID,
+        "Watermelon SVG Viewer",
+        exe_path,
+        svg_icon,
+    )?;
     register_prog_id(
         &classes,
         VD_PROG_ID,
@@ -173,6 +179,11 @@ fn notify_shell_associations_changed() {
     const SHCNE_ASSOCCHANGED: i32 = 0x0800_0000;
     const SHCNF_IDLIST: u32 = 0x0000;
     unsafe {
-        SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, std::ptr::null(), std::ptr::null());
+        SHChangeNotify(
+            SHCNE_ASSOCCHANGED,
+            SHCNF_IDLIST,
+            std::ptr::null(),
+            std::ptr::null(),
+        );
     }
 }

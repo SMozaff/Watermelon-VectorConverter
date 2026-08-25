@@ -114,27 +114,6 @@ fun SettingsScreen(nav: NavController, vm: SettingsViewModel = viewModel()) {
 
             HorizontalDivider()
 
-            Text("File preview", style = MaterialTheme.typography.titleLarge)
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Show file properties")
-                    Text(
-                        "Displays name, size, dimensions and structure below the preview image.",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = settings.showFileProperties,
-                    onCheckedChange = { vm.setShowFileProperties(it) },
-                )
-            }
-
-            HorizontalDivider()
-
             Text("Diagnostics", style = MaterialTheme.typography.titleLarge)
             val ctx = LocalContext.current
             Button(

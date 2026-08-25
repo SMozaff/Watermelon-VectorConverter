@@ -36,7 +36,6 @@ import com.watermelon.converter.viewmodel.ConversionViewModel
 import com.watermelon.converter.viewmodel.ConvertUiState
 import com.watermelon.converter.viewmodel.ReverseConversionViewModel
 import com.watermelon.converter.viewmodel.ReverseConvertUiState
-import com.watermelon.converter.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,11 +43,9 @@ fun PreviewScreen(
     nav: NavController,
     vm: ConversionViewModel = nav.sharedGraphViewModel(),
     revVm: ReverseConversionViewModel = nav.sharedGraphViewModel(),
-    settingsVm: SettingsViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
     val revState by revVm.state.collectAsState()
-    val settings by settingsVm.settings.collectAsState()
     // StateFlow delegation cannot be smart-cast by Kotlin. These stable local
     // values keep the state renderer exhaustive and safe across recomposition.
     val forwardState = state
@@ -185,7 +182,6 @@ fun PreviewScreen(
                 outputPreviewLabel = "Generated VD",
                 outputPreview = done.vdPreviewPng,
                 analysisJson = done.analysisJson,
-                showFileProperties = settings.showFileProperties,
                 isForward = true,
             )
             revDone != null -> SuccessContent(
@@ -198,7 +194,6 @@ fun PreviewScreen(
                 outputPreviewLabel = "Generated SVG",
                 outputPreview = revDone.svgPreviewPng,
                 analysisJson = revDone.analysisJson,
-                showFileProperties = settings.showFileProperties,
                 isForward = false,
             )
             else -> PreviewIdle(
@@ -325,7 +320,6 @@ private fun SuccessContent(
     outputPreviewLabel: String,
     outputPreview: ByteArray?,
     analysisJson: String?,
-    showFileProperties: Boolean,
     isForward: Boolean,
 ) {
     Column(
@@ -350,24 +344,37 @@ private fun SuccessContent(
             PreviewTile(outputPreviewLabel, outputPreview, Modifier.weight(1f))
         }
 
-        if (showFileProperties && analysisJson != null) {
+        var propertiesExpanded by remember { mutableStateOf(false) }
+        if (analysisJson != null) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            val props = remember(analysisJson) {
-                runCatching {
-                    if (isForward) {
-                        com.watermelon.converter.data.model.VectorProperties.fromJson(
-                            name = sourceName,
-                            json = analysisJson,
-                        )
-                    } else {
-                        com.watermelon.converter.data.model.VectorProperties.fromJson(
-                            name = sourceName,
-                            json = analysisJson,
-                        )
-                    }
-                }.getOrNull()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "File properties",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { propertiesExpanded = !propertiesExpanded }) {
+                    Text(if (propertiesExpanded) "Collapse" else "Details")
+                }
             }
-            if (props != null) VectorPropertiesPanel(props)
+            if (propertiesExpanded) {
+                val props = remember(analysisJson) {
+                    runCatching {
+                        if (isForward) {
+                            com.watermelon.converter.data.model.VectorProperties.fromJson(
+                                name = sourceName,
+                                json = analysisJson,
+                            )
+                        } else {
+                            com.watermelon.converter.data.model.VectorProperties.fromJson(
+                                name = sourceName,
+                                json = analysisJson,
+                            )
+                        }
+                    }.getOrNull()
+                }
+                if (props != null) VectorPropertiesPanel(props)
+            }
         }
 
         var expanded by remember { mutableStateOf(false) }

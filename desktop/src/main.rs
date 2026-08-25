@@ -15,6 +15,17 @@
 // separate installer-bundling step for a second executable, and (the
 // actual point of this rewrite) no WebView2/WebKitGTK dependency anywhere.
 
+// Suppresses the console/terminal window Windows otherwise opens alongside
+// this GUI app (Rust binaries default to the console subsystem on Windows
+// unless told otherwise — this is what actually shows/hides it, not
+// anything to do with wvgc-cli, which is a separate binary entirely).
+// Release-only, not unconditional: debug builds keep the console so the
+// eprintln! diagnostics in file_assoc/ (and anywhere else) stay visible
+// while developing; only a release build hides it for end users. Ignored
+// entirely on non-Windows targets (see the Rust Reference on
+// windows_subsystem), so no #[cfg(windows)] guard is needed here.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod app;
 #[cfg(windows)]
 mod file_assoc;
