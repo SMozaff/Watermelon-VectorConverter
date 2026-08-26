@@ -11,8 +11,10 @@
 // causing blank-window failures. Detected and reported as unsupported
 // rather than attempted.
 
-use iced::widget::{button, center, column, container, image, row, space, text};
-use iced::{mouse, window, Element, Length, Subscription, Task};
+use iced::widget::{button, canvas, center, column, container, image, row, space, text};
+use iced::{
+    mouse, window, Element, Length, Point, Rectangle, Renderer, Subscription, Task, Theme, Vector,
+};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -65,6 +67,7 @@ enum ViewState {
         name: String,
         handle: image::Handle,
         zoom: f32,
+        offset: Vector,
     },
     Avd {
         name: String,
@@ -73,6 +76,7 @@ enum ViewState {
         current: usize,
         elapsed_in_frame: Duration,
         zoom: f32,
+        offset: Vector,
     },
     Unsupported {
         name: String,
@@ -84,12 +88,24 @@ enum ViewState {
 
 pub struct Viewer {
     state: ViewState,
+    // Left-drag panning (only meaningful once zoomed in — see the
+    // WheelScrolled handler, which resets `offset` back to Vector::ZERO
+    // whenever zoom returns to 100%). Tracked here rather than per-ViewState
+    // because it's transient input bookkeeping, not part of what a given
+    // file/zoom/pan combination "is". `drag_anchor` is cleared on every
+    // ButtonPressed so the very first CursorMoved after a press just
+    // establishes a baseline instead of applying a delta from a stale
+    // position (which would otherwise produce a jump on click).
+    dragging: bool,
+    drag_anchor: Option<Point>,
 }
 
 impl Viewer {
     pub fn new(initial_path: PathBuf) -> (Self, Task<Message>) {
         let viewer = Viewer {
             state: ViewState::Loading,
+            dragging: false,
+            drag_anchor: None,
         };
         (
             viewer,
@@ -108,14 +124,17 @@ impl Viewer {
             }
             Message::OpenFilePicked(None) => {}
             Message::FileLoaded(Ok(loaded)) => {
+                // A freshly opened file always starts at 1.0 zoom / centered
+                // (no pan offset) rather than carrying over the previous
+                // file's zoom and pan.
+                self.dragging = false;
+                self.drag_anchor = None;
                 self.state = match loaded {
-                    // A freshly opened file always starts at 1.0 (fit-to-
-                    // window via ContentFit::Contain) rather than carrying
-                    // over the previous file's zoom level.
                     LoadedFile::Static { name, png } => ViewState::Static {
                         name,
                         handle: image::Handle::from_bytes(png),
                         zoom: 1.0,
+                        offset: Vector::ZERO,
                     },
                     LoadedFile::Avd {
                         name,
@@ -130,6 +149,7 @@ impl Viewer {
                             current: 0,
                             elapsed_in_frame: Duration::ZERO,
                             zoom: 1.0,
+                            offset: Vector::ZERO,
                         }
                     }
                     LoadedFile::UnsupportedAnimatedSvg { name } => ViewState::Unsupported { name },
@@ -170,23 +190,62 @@ impl Viewer {
             }
             Message::IcedEvent(iced::Event::Window(window::Event::FileDropped(path))) => {
                 self.state = ViewState::Loading;
+                self.dragging = false;
+                self.drag_anchor = None;
                 return Task::perform(load_file(path), Message::FileLoaded);
             }
             Message::IcedEvent(iced::Event::Mouse(mouse::Event::WheelScrolled { delta })) => {
                 // Only Static/Avd actually show an image to zoom; any other
                 // state (Loading/Unsupported/Error) has no image and simply
                 // ignores wheel input rather than erroring.
-                let zoom_ref = match &mut self.state {
-                    ViewState::Static { zoom, .. } => Some(zoom),
-                    ViewState::Avd { zoom, .. } => Some(zoom),
+                let zoom_offset = match &mut self.state {
+                    ViewState::Static { zoom, offset, .. } => Some((zoom, offset)),
+                    ViewState::Avd { zoom, offset, .. } => Some((zoom, offset)),
                     _ => None,
                 };
-                if let Some(zoom) = zoom_ref {
+                if let Some((zoom, offset)) = zoom_offset {
                     let step = match delta {
                         mouse::ScrollDelta::Lines { y, .. } => y * ZOOM_STEP_PER_LINE,
                         mouse::ScrollDelta::Pixels { y, .. } => y * ZOOM_STEP_PER_PIXEL,
                     };
                     *zoom = (*zoom + step).clamp(ZOOM_MIN, ZOOM_MAX);
+                    // Recenter whenever zoom returns to exactly 100% — pan
+                    // only makes sense once zoomed in, and this keeps the
+                    // next zoom-in starting from a known, centered state
+                    // rather than resuming a stale offset. A small epsilon
+                    // (rather than `== 1.0`) absorbs the float drift from
+                    // repeated `+= step` adjustments landing a hair off 1.0.
+                    if (*zoom - 1.0).abs() < 0.001 {
+                        *offset = Vector::ZERO;
+                    }
+                }
+            }
+            Message::IcedEvent(iced::Event::Mouse(mouse::Event::ButtonPressed(
+                mouse::Button::Left,
+            ))) => {
+                if matches!(self.state, ViewState::Static { .. } | ViewState::Avd { .. }) {
+                    self.dragging = true;
+                    self.drag_anchor = None;
+                }
+            }
+            Message::IcedEvent(iced::Event::Mouse(mouse::Event::ButtonReleased(
+                mouse::Button::Left,
+            ))) => {
+                self.dragging = false;
+                self.drag_anchor = None;
+            }
+            Message::IcedEvent(iced::Event::Mouse(mouse::Event::CursorMoved { position })) => {
+                if self.dragging {
+                    if let Some(anchor) = self.drag_anchor {
+                        let delta = position - anchor;
+                        match &mut self.state {
+                            ViewState::Static { offset, .. } | ViewState::Avd { offset, .. } => {
+                                *offset += delta;
+                            }
+                            _ => {}
+                        }
+                    }
+                    self.drag_anchor = Some(position);
                 }
             }
             Message::IcedEvent(_) => {}
@@ -197,19 +256,23 @@ impl Viewer {
     pub fn view(&self) -> Element<'_, Message> {
         let content: Element<'_, Message> = match &self.state {
             ViewState::Loading => center(text("Loading…")).into(),
-            ViewState::Static { handle, zoom, .. } => center(
-                image(handle.clone())
-                    .content_fit(iced::ContentFit::Contain)
-                    .scale(*zoom),
-            )
+            ViewState::Static { handle, zoom, offset, .. } => canvas(PannableImage {
+                handle: handle.clone(),
+                zoom: *zoom,
+                offset: *offset,
+            })
+            .width(Length::Fill)
+            .height(Length::Fill)
             .into(),
-            ViewState::Avd { handles, current, zoom, .. } => {
+            ViewState::Avd { handles, current, zoom, offset, .. } => {
                 let handle = handles.get(*current).cloned().unwrap_or_else(|| handles[0].clone());
-                center(
-                    image(handle)
-                        .content_fit(iced::ContentFit::Contain)
-                        .scale(*zoom),
-                )
+                canvas(PannableImage {
+                    handle,
+                    zoom: *zoom,
+                    offset: *offset,
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
                 .into()
             }
             ViewState::Unsupported { .. } => center(
@@ -269,6 +332,51 @@ impl Viewer {
             subs.push(iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick));
         }
         Subscription::batch(subs)
+    }
+}
+
+/// Draws `handle` fit-to-bounds (equivalent to `ContentFit::Contain` — valid
+/// here because every preview PNG this viewer ever loads is rendered
+/// square by `image_export::render_svg_preview`/`render_vd_preview`, so a
+/// single "min(width, height)" side always matches both axes), then scaled
+/// by `zoom` and shifted by `offset` around the canvas center. A plain
+/// `image` widget has no offset/translation primitive to pan with — using
+/// canvas + `Frame::draw_image` with an explicit destination `Rectangle` is
+/// the mechanism that actually supports positioning the image arbitrarily,
+/// verified against iced 0.14's own source (iced_graphics::geometry::Frame).
+struct PannableImage {
+    handle: image::Handle,
+    zoom: f32,
+    offset: Vector,
+}
+
+impl canvas::Program<Message> for PannableImage {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+
+        let fitted_side = bounds.width.min(bounds.height);
+        let displayed_side = fitted_side * self.zoom;
+        let center = Point::new(bounds.width / 2.0, bounds.height / 2.0) + self.offset;
+
+        let dest = Rectangle {
+            x: center.x - displayed_side / 2.0,
+            y: center.y - displayed_side / 2.0,
+            width: displayed_side,
+            height: displayed_side,
+        };
+
+        frame.draw_image(dest, canvas::Image::new(self.handle.clone()));
+
+        vec![frame.into_geometry()]
     }
 }
 
