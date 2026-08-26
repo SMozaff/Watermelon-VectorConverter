@@ -169,6 +169,7 @@ pub(super) struct InputFile {
     name: String,
     bytes: Vec<u8>,
     kind: InputKind,
+    source_preview: Option<image::Handle>,
 }
 
 #[derive(Debug)]
@@ -555,6 +556,7 @@ impl Converter {
             container(file_summary)
                 .padding(16)
                 .style(move |_| panel_style(p.surface_muted, p.border)),
+            preview_panel(input.kind.label(), input.source_preview.as_ref(), p),
             text(format!(
                 "{} will produce a clean {} output.",
                 input.kind.label(),
@@ -1386,10 +1388,19 @@ async fn load_input(path: PathBuf) -> Result<InputFile, String> {
         return Err("Choose an SVG or Android VectorDrawable XML file. The root element was not recognised.".to_owned());
     };
 
+    let source_preview = match kind {
+        InputKind::Svg => svg_converter_core::image_export::render_svg_preview(&bytes, 720).ok(),
+        InputKind::VectorDrawable => {
+            svg_converter_core::image_export::render_vd_preview(&content, 720).ok()
+        }
+    }
+    .map(image::Handle::from_bytes);
+
     Ok(InputFile {
         name: file_display_name(&path),
         bytes,
         kind,
+        source_preview,
     })
 }
 
