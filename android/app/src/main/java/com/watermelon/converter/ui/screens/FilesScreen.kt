@@ -30,6 +30,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -228,7 +232,7 @@ fun FilesScreen(
 
             // ── Preview pane ──
             if (preview !is PreviewState.Empty && !selectionMode) {
-                HorizontalDivider(color = Color(0xFFE2E8F0))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 PreviewPane(
                     state = preview,
                     onExpand = { fullScreen = true },
@@ -409,15 +413,15 @@ private fun FilesTopBar(
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            placeholder = { Text("Search files and folders", color = SlateGray) },
-            leadingIcon = { Text("⌕", fontSize = 18.sp, color = SlateGray) },
+            placeholder = { Text("Search files and folders", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            leadingIcon = { Text("⌕", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             singleLine = true,
             shape = RoundedCornerShape(50),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = FreshTeal,
-                unfocusedBorderColor = Color(0xFFE2E8F0),
-                focusedContainerColor = PureWhite,
-                unfocusedContainerColor = PureWhite,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
             ),
             modifier = Modifier.fillMaxWidth().height(52.dp),
         )
@@ -439,7 +443,7 @@ private fun FilesTopBar(
         }
         Spacer(Modifier.height(4.dp))
     }
-    HorizontalDivider(color = Color(0xFFE2E8F0))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -518,6 +522,14 @@ private fun FileRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = if (node.isDirectory) {
+                    "Open folder ${node.name}"
+                } else {
+                    "Open file ${node.name}"
+                }
+            }
             .combinedClickable(onClick = onTap, onLongClick = onLongPress)
             .background(
                 if (isSelected) FreshTeal.copy(alpha = 0.10f) else Color.Transparent
@@ -578,7 +590,9 @@ private fun FileRow(
                 TextButton(
                     onClick = { menuOpen = true },
                     contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .semantics { contentDescription = "File actions for ${node.name}" },
                 ) {
                     Text("⋮", fontSize = 18.sp, color = SlateGray)
                 }
@@ -593,7 +607,7 @@ private fun FileRow(
             }
         }
     }
-    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 }
 
 @Composable
@@ -601,6 +615,10 @@ private fun StorageRootRow(storageRoot: StorageRoot, onTap: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
+            .semantics {
+                role = Role.Button
+                contentDescription = "Open ${storageRoot.label}"
+            }
             .clickable(onClick = onTap)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -626,7 +644,7 @@ private fun StorageRootRow(storageRoot: StorageRoot, onTap: () -> Unit) {
             )
         }
     }
-    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -650,6 +668,9 @@ private fun FileOpsFab(
     Box {
         FloatingActionButton(
             onClick = { open = true },
+            modifier = Modifier.semantics {
+                contentDescription = "Open actions for selected files"
+            },
             containerColor = WatermelonRed,
             contentColor = PureWhite,
             shape = CircleShape,
@@ -744,7 +765,7 @@ private fun PreviewPane(
             }
             if (propertiesExpanded) {
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = Color(0xFFE2E8F0))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(Modifier.height(8.dp))
                 VectorPropertiesPanel(properties)
             }
@@ -805,6 +826,10 @@ private fun FullScreenPreview(state: PreviewState, onClose: () -> Unit) {
                     .padding(12.dp)
                     .clip(CircleShape)
                     .background(DeepNavy.copy(alpha = 0.75f))
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "Close full-screen preview"
+                    }
                     .clickable { onClose() }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
@@ -932,10 +957,15 @@ private fun FolderChooserDialog(
             Column(Modifier.padding(20.dp).heightIn(max = 480.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (current != null) {
-                        TextButton(onClick = {
-                            val parent = current?.parentFile
-                            current = if (storageRoots.any { it.root.absolutePath == current?.absolutePath }) null else parent
-                        }) {
+                        TextButton(
+                            onClick = {
+                                val parent = current?.parentFile
+                                current = if (storageRoots.any { it.root.absolutePath == current?.absolutePath }) null else parent
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = "Go to parent folder"
+                            },
+                        ) {
                             Text("‹", color = FreshTeal, fontSize = 18.sp)
                         }
                     }
@@ -954,6 +984,10 @@ private fun FolderChooserDialog(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
+                                    .semantics {
+                                        role = Role.Button
+                                        contentDescription = "Choose ${root.label} as destination"
+                                    }
                                     .clickable { current = root.root }
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -968,6 +1002,10 @@ private fun FolderChooserDialog(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
+                                    .semantics {
+                                        role = Role.Button
+                                        contentDescription = "Open folder ${dir.name}"
+                                    }
                                     .clickable { current = dir }
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,

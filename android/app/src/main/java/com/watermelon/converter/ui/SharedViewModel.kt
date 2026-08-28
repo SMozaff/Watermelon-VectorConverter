@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.compose.runtime.remember
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 /** Returns a ViewModel scoped to the nav graph's start destination, so the
  *  same instance is shared across Import -> Preview -> Export (and Batch -> Export).
@@ -18,7 +19,8 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
  *  converted data would be lost between screens. */
 @Composable
 inline fun <reified T : ViewModel> NavController.sharedGraphViewModel(): T {
-    val entry = remember(this) {
+    val currentBackStackEntry = currentBackStackEntryAsState().value
+    val entry = remember(currentBackStackEntry) {
         getBackStackEntry(graph.findStartDestination().id)
     }
     return viewModel(viewModelStoreOwner = entry)

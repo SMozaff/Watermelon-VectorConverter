@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.watermelon.converter.R
 import com.watermelon.converter.Routes
+import com.watermelon.converter.ui.components.TransformationMotif
 import com.watermelon.converter.ui.sharedGraphViewModel
 import com.watermelon.converter.viewmodel.ConversionViewModel
 import com.watermelon.converter.viewmodel.ReverseConversionViewModel
@@ -111,6 +112,7 @@ fun HomeScreen(
             title = "SVG to VectorDrawable",
             subtitle = "Prepare an Android XML vector from an SVG file.",
             primaryLabel = "Choose SVG",
+            isForward = true,
             onSingle = { svgPicker.launch(arrayOf("image/svg+xml", "text/xml", "*/*")) },
             onBatch = { nav.navigate(Routes.BATCH) },
         )
@@ -119,6 +121,7 @@ fun HomeScreen(
             title = "VectorDrawable to SVG",
             subtitle = "Turn Android VectorDrawable XML back into SVG.",
             primaryLabel = "Choose XML",
+            isForward = false,
             onSingle = { xmlPicker.launch(arrayOf("text/xml", "application/xml", "*/*")) },
             onBatch = { nav.navigate(Routes.BATCH_REVERSE) },
         )
@@ -138,6 +141,7 @@ private fun ConversionOption(
     title: String,
     subtitle: String,
     primaryLabel: String,
+    isForward: Boolean,
     onSingle: () -> Unit,
     onBatch: () -> Unit,
 ) {
@@ -151,27 +155,28 @@ private fun ConversionOption(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            TransformationMotif(isForward = isForward)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Button(
-                    onClick = onSingle,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f),
-                ) { Text(primaryLabel, textAlign = TextAlign.Center) }
-                OutlinedButton(
-                    onClick = onBatch,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f),
-                ) { Text("Batch files", textAlign = TextAlign.Center) }
-            }
+            // Single-file conversion is the primary, fastest workflow —
+            // full-width button, not sharing a row with batch. Batch is
+            // deliberately a secondary text/link-style action below it, per
+            // the redesign prompt's explicit instruction: "Do NOT render
+            // two equally weighted buttons... Use one clear primary
+            // button; one secondary text/link-style batch action."
+            Button(
+                onClick = onSingle,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(primaryLabel, textAlign = TextAlign.Center) }
+            TextButton(
+                onClick = onBatch,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Convert multiple files →") }
         }
     }
 }

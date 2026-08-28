@@ -33,6 +33,12 @@ pub fn run_converter() -> iced::Result {
     .theme(converter::Converter::theme)
     .window(iced::window::Settings {
         icon: window_icon(),
+        // Floor for the responsive two-pane/stacked layout switch in
+        // converter.rs (see Converter::window_width) — below this, neither
+        // layout has room for its controls to stay usable, so the window
+        // itself refuses to shrink further rather than letting content get
+        // clipped or inaccessible.
+        min_size: Some(iced::Size::new(560.0, 480.0)),
         ..Default::default()
     })
     .window_size((1040.0, 760.0))

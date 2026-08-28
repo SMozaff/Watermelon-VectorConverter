@@ -16,9 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.watermelon.converter.data.model.VectorProperties
-import com.watermelon.converter.ui.theme.FreshTeal
-import com.watermelon.converter.ui.theme.SlateGray
-import com.watermelon.converter.ui.theme.WatermelonRed
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -71,7 +68,14 @@ fun VectorPropertiesPanel(props: VectorProperties, modifier: Modifier = Modifier
         StructFlag(
             label = "Animated",
             value = props.isAnimated,
-            trueColor = WatermelonRed,  // animated = notable, not a problem
+            // tertiary (not primary/error): "notable, not a problem" —
+            // Material3's own docs describe tertiary as for drawing
+            // heightened attention without the primary/success or
+            // error/problem connotation either of those roles would imply
+            // here. Was hardcoded to the WatermelonRed brand constant
+            // before, which (a) doesn't adapt between light/dark theme and
+            // (b) reads as more alarming than "animated" warrants.
+            trueColor = MaterialTheme.colorScheme.tertiary,
         )
         Spacer(Modifier.height(12.dp))
     }
@@ -82,7 +86,7 @@ private fun SectionHeader(title: String) {
     Text(
         title,
         style = MaterialTheme.typography.labelLarge,
-        color = FreshTeal,
+        color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 4.dp),
     )
@@ -94,7 +98,7 @@ private fun PropRow(label: String, value: String) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
-            color = SlateGray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(100.dp),
         )
         Text(
@@ -109,19 +113,19 @@ private fun PropRow(label: String, value: String) {
 private fun StructFlag(
     label: String,
     value: Boolean,
-    trueColor: androidx.compose.ui.graphics.Color = FreshTeal,
+    trueColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
 ) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
-            color = SlateGray,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         Text(
             if (value) "\u2713" else "\u2013",
             style = MaterialTheme.typography.bodyMedium,
-            color = if (value) trueColor else SlateGray,
+            color = if (value) trueColor else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = if (value) FontWeight.Bold else FontWeight.Normal,
         )
     }

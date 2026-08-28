@@ -13,7 +13,6 @@ import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -34,22 +33,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.watermelon.converter.ui.components.FolderIcon
 import com.watermelon.converter.ui.screens.FilesScreen
 import com.watermelon.converter.ui.screens.HomeScreen
 import com.watermelon.converter.ui.screens.SettingsScreen
 import com.watermelon.converter.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 
-private data class Tab(val label: String, val icon: ImageVector)
+private data class Tab(val label: String, val icon: @Composable () -> Unit)
 
 private val TABS = listOf(
-    Tab("Home", Icons.Filled.Home),
-    Tab("Files", Icons.Filled.Search),
-    Tab("Settings", Icons.Filled.Settings),
+    Tab("Home") { Icon(Icons.Filled.Home, contentDescription = null) },
+    // FolderIcon (this project's own hand-drawn Canvas icon, already used
+    // throughout the file browser itself) instead of a Material glyph —
+    // Icons.Filled.Search was the previous icon here, which is exactly
+    // what the Android redesign prompt calls out as wrong for a
+    // Files/browser destination ("Do not use Search as the icon for a
+    // Files/browser destination"). Folder is not in material-icons-core
+    // (unconfirmed without adding the large material-icons-extended
+    // dependency), so this reuses an icon that's already proven to
+    // compile and render in this exact app rather than gambling on that.
+    Tab("Files") { FolderIcon(size = 24.dp) },
+    Tab("Settings") { Icon(Icons.Filled.Settings, contentDescription = null) },
 )
 
 @Composable
@@ -96,12 +105,7 @@ fun MainPager(nav: NavController, settingsVm: SettingsViewModel) {
                                 else pagerState.scrollToPage(index)
                             }
                         },
-                        icon = {
-                            Icon(
-                                tab.icon,
-                                contentDescription = tab.label,
-                            )
-                        },
+                        icon = { tab.icon() },
                         label = {
                             Text(
                                 tab.label,
