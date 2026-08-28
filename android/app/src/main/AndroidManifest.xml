@@ -22,7 +22,6 @@
             android:name=".MainActivity"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
             android:theme="@style/Theme.Watermelon">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -51,17 +50,17 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/svg+xml" />
+                <data android:scheme="content" android:mimeType="image/svg+xml" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/xml" />
+                <data android:scheme="content" android:mimeType="text/xml" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/xml" />
+                <data android:scheme="content" android:mimeType="application/xml" />
             </intent-filter>
         </activity>
     </application>

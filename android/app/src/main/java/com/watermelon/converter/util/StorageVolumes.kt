@@ -22,8 +22,15 @@ data class WvgcVolume(
     val isRemovable: Boolean,
     private val volume: StorageVolume,
 ) {
-    /** Intent to open the SAF folder picker scoped to this volume. */
-    fun createOpenDocumentTreeIntent(): Intent = volume.createOpenDocumentTreeIntent()
+    /** Intent to open the SAF folder picker scoped to this volume where supported. */
+    fun createOpenDocumentTreeIntent(): Intent =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            volume.createOpenDocumentTreeIntent()
+        } else {
+            // Android 8–9 support the SAF tree picker but cannot scope its initial
+            // location to a StorageVolume. The user can still select a folder.
+            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+        }
 }
 
 /**

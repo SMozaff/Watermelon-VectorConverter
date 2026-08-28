@@ -5,20 +5,17 @@ use iced::widget::{
     button, canvas, center, column, container, image, progress_bar, row, scrollable, space, text,
 };
 use iced::{
-    clipboard, mouse, window, Background, Border, Color, ContentFit, Element, Length, Point,
-    Rectangle, Renderer, Size, Subscription, Task, Theme,
+    clipboard, keyboard, mouse, window, Background, Border, Color, ContentFit, Element, Length,
+    Point, Rectangle, Renderer, Subscription, Task, Theme,
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 const ABOUT_LOGO: &[u8] = include_bytes!("../../assets/watermelon_iphone_logo.png");
 const IFEM_DOCTRINE_URL: &str = "https://IFEM-doctrine.github.io/";
 const PERSONAL_WEBSITE_URL: &str = "https://SMozaff.github.io/";
 const IFEM_DOCTRINE_LABEL: &str = "IFEM-doctrine.github.io";
 const PERSONAL_WEBSITE_LABEL: &str = "SMozaff.github.io";
-const SPLASH_TICK: Duration = Duration::from_millis(16);
-const SPLASH_DURATION: Duration = Duration::from_millis(1500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Appearance {
@@ -94,7 +91,6 @@ const LIGHT_PALETTE: Palette = Palette {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Screen {
-    Splash,
     Converter,
     About,
 }
@@ -138,6 +134,48 @@ impl Direction {
         match self {
             Self::SvgToVectorDrawable => "xml",
             Self::VectorDrawableToSvg => "svg",
+        }
+    }
+
+    fn source_format(self) -> VectorFormat {
+        match self {
+            Self::SvgToVectorDrawable => VectorFormat::Svg,
+            Self::VectorDrawableToSvg => VectorFormat::VdXml,
+        }
+    }
+
+    fn output_format(self) -> VectorFormat {
+        match self {
+            Self::SvgToVectorDrawable => VectorFormat::VdXml,
+            Self::VectorDrawableToSvg => VectorFormat::Svg,
+        }
+    }
+}
+
+/// The shared Source -> Result format-badge vocabulary. Same three variants
+/// as the Android counterpart (see Android's `VectorFormat.kt`) — this is
+/// the "same conceptual grammar on both platforms" the redesign prompt
+/// asks for; the two enums are independent Rust/Kotlin types (there's no
+/// shared code between the platforms) but are kept deliberately in lock-
+/// step: same variant names, same short labels, same semantic-token
+/// mapping rationale documented in `format_badge()`'s own doc comment.
+/// `BatchZip` is not wired into any UI yet — it exists now so a future
+/// batch/zip badge follows the same component without a breaking change,
+/// per the prompt's "optional future support" instruction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VectorFormat {
+    Svg,
+    VdXml,
+    #[allow(dead_code)]
+    BatchZip,
+}
+
+impl VectorFormat {
+    fn short_label(self) -> &'static str {
+        match self {
+            Self::Svg => "SVG",
+            Self::VdXml => "XML",
+            Self::BatchZip => "ZIP",
         }
     }
 }
@@ -185,6 +223,7 @@ enum ConversionState {
         source_preview: Option<image::Handle>,
         output_preview: Option<image::Handle>,
         output_text: String,
+        output_analysis: Option<svg_converter_core::analysis::VectorAnalysis>,
     },
     Error {
         name: Option<String>,
@@ -199,16 +238,60 @@ pub(super) struct ConvertedOutput {
     source_preview: Option<Vec<u8>>,
     output_preview: Option<Vec<u8>>,
     output_text: String,
+    /// Structural analysis of the OUTPUT file, straight from
+    /// `svg-converter-core::analysis` — the same authoritative walk the
+    /// Android file-manager properties panel already uses. Never a
+    /// fidelity score or a warning list: conversion here is strict
+    /// all-or-nothing (an unsupported construct is a hard
+    /// `ConversionError`, not a silent degrade — see svg_parser.rs's own
+    /// doc comment), so there is nothing genuine to rate or warn about
+    /// once conversion has actually succeeded. `None` only if the
+    /// analysis pass itself failed to re-parse the output we just
+    /// generated (should not happen in practice, but analysis is a
+    /// best-effort summary, not something that should fail the whole
+    /// conversion if it stumbles).
+    output_analysis: Option<svg_converter_core::analysis::VectorAnalysis>,
 }
 
 pub struct Converter {
     screen: Screen,
-    splash_elapsed: Duration,
     appearance: Appearance,
     direction: Direction,
     state: ConversionState,
     last_input: Option<InputFile>,
     notice: Option<String>,
+    /// Current window width in logical pixels, used to switch between the
+    /// side-by-side and stacked source/result layouts. Initialized to match
+    /// mod.rs's initial `.window_size((1040.0, 760.0))` so the very first
+    /// frame already renders at the right layout, before any
+    /// `window::resize_events()` has fired; kept in sync afterwards via
+    /// `Message::WindowResized`.
+    window_width: f32,
+    /// Backing state for the code viewer's `text_editor`. Rebuilt fresh
+    /// whenever a NEW conversion completes (see ConversionFinished) rather
+    /// than reused, since a fresh `Content::with_text` also resets cursor/
+    /// scroll/selection position, which is the right behavior for "this is
+    /// now a different file's output" rather than carrying over the
+    /// previous file's cursor position into unrelated text. `text_editor`
+    /// is used (not the plain `text` widget) specifically because plain
+    /// `text` in iced has no mouse-drag selection or Select All at all —
+    /// verified: iced_core/font.rs's Text widget API has no selection
+    /// methods, and a live iced discourse thread explicitly requests this
+    /// as a still-open feature for rendered text. `text_editor` is kept
+    /// read-only by filtering `Action::Edit` out in `update()` rather than
+    /// omitting `.on_action()` entirely — the latter disables ALL
+    /// interaction (including the selection/scroll/click this viewer
+    /// needs), per the widget's own documented behavior.
+    code_content: iced::widget::text_editor::Content,
+    /// Drives the indeterminate progress animation in `working_view` — a
+    /// sweeping bar rather than a fixed value, since the real conversion
+    /// (a single opaque `Task::perform(convert_input(...), ...)` with no
+    /// partial-progress channel back to the UI) has no genuine percentage
+    /// to report. Cycles 0.0->1.0 continuously while
+    /// `ConversionState::Working` is active; the subscription that
+    /// advances it is scoped to only run during that state (see
+    /// `subscription()`), so it costs nothing the rest of the time.
+    working_phase: f32,
 }
 
 impl Converter {
@@ -226,13 +309,15 @@ impl Converter {
     pub fn new() -> (Self, Task<Message>) {
         (
             Self {
-                screen: Screen::Splash,
-                splash_elapsed: Duration::ZERO,
+                screen: Screen::Converter,
                 appearance: Appearance::Dark,
                 direction: Direction::SvgToVectorDrawable,
                 state: ConversionState::Empty,
                 last_input: None,
                 notice: None,
+                window_width: 1040.0,
+                code_content: iced::widget::text_editor::Content::new(),
+                working_phase: 0.0,
             },
             Task::none(),
         )
@@ -240,13 +325,6 @@ impl Converter {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::SplashTick if self.screen == Screen::Splash => {
-                self.splash_elapsed += SPLASH_TICK;
-                if self.splash_elapsed >= SPLASH_DURATION {
-                    self.screen = Screen::Converter;
-                }
-            }
-            Message::SplashTick => {}
             Message::OpenAbout => {
                 self.screen = Screen::About;
             }
@@ -313,12 +391,15 @@ impl Converter {
                 }
             }
             Message::ConversionFinished(Ok(converted)) => {
+                self.code_content =
+                    iced::widget::text_editor::Content::with_text(&converted.output_text);
                 self.state = ConversionState::Done {
                     name: converted.name,
                     direction: converted.direction,
                     source_preview: converted.source_preview.map(image::Handle::from_bytes),
                     output_preview: converted.output_preview.map(image::Handle::from_bytes),
                     output_text: converted.output_text,
+                    output_analysis: converted.output_analysis,
                 };
             }
             Message::ConversionFinished(Err(message)) => {
@@ -380,6 +461,58 @@ impl Converter {
                 };
                 return Task::perform(load_input(path), Message::InputLoaded);
             }
+            Message::IcedEvent(iced::Event::Window(window::Event::Resized(size))) => {
+                self.window_width = size.width;
+            }
+            Message::IcedEvent(iced::Event::Keyboard(keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                ..
+            })) => {
+                // Deliberately NOT binding Ctrl/Cmd+C to CopyOutput: when
+                // the code viewer's text_editor has focus, that same combo
+                // already triggers its own built-in Binding::Copy (copying
+                // the current SELECTION, which is the more correct
+                // behavior there) — adding a second, app-level global
+                // binding for the same combo risks double-firing or
+                // fighting with the editor's own copy. The toolbar's
+                // "Copy" button (whole-output copy) stays mouse-only.
+                use keyboard::key::Named;
+                match key.as_ref() {
+                    keyboard::Key::Character("o") if modifiers.command() => {
+                        return Task::perform(pick_file(), Message::FilePicked);
+                    }
+                    keyboard::Key::Character("s")
+                        if modifiers.command()
+                            && matches!(self.state, ConversionState::Done { .. }) =>
+                    {
+                        return self.update(Message::SaveRequested);
+                    }
+                    keyboard::Key::Named(Named::Escape) if self.screen == Screen::About => {
+                        return self.update(Message::CloseAbout);
+                    }
+                    _ => {}
+                }
+            }
+            Message::CodeEditorAction(action) => {
+                // Read-only: every interaction the editor supports EXCEPT
+                // actually editing text is allowed through (selection,
+                // click-to-position, drag-select, scroll) — see the
+                // code_content field doc comment for why `.on_action()`
+                // must still be called (omitting it disables selection
+                // too, not just editing).
+                if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
+                    self.code_content.perform(action);
+                }
+            }
+            Message::WorkingTick => {
+                // Simple sawtooth 0.0 -> 1.0 -> 0.0 -> ...: advance by a
+                // fixed step each 16ms tick and wrap. Deliberately not tied
+                // to real elapsed conversion time (there is none to read),
+                // this is purely a "something is happening" sweep, not a
+                // percentage — see working_phase's field doc.
+                self.working_phase = (self.working_phase + 0.012) % 1.0;
+            }
             Message::IcedEvent(_) => {}
         }
 
@@ -388,7 +521,6 @@ impl Converter {
 
     pub fn view(&self) -> Element<'_, Message> {
         match self.screen {
-            Screen::Splash => self.splash_view(),
             Screen::Converter => self.workspace_view(),
             Screen::About => self.about_view(),
         }
@@ -396,64 +528,26 @@ impl Converter {
 
     pub fn subscription(&self) -> Subscription<Message> {
         match self.screen {
-            Screen::Splash => iced::time::every(SPLASH_TICK).map(|_| Message::SplashTick),
-            Screen::Converter => iced::event::listen().map(Message::IcedEvent),
+            Screen::Converter => {
+                let events = iced::event::listen().map(Message::IcedEvent);
+                if matches!(self.state, ConversionState::Working { .. }) {
+                    Subscription::batch([
+                        events,
+                        iced::time::every(std::time::Duration::from_millis(16))
+                            .map(|_| Message::WorkingTick),
+                    ])
+                } else {
+                    events
+                }
+            }
             Screen::About => Subscription::none(),
         }
     }
 
-    fn splash_view(&self) -> Element<'_, Message> {
-        let progress = (self.splash_elapsed.as_millis() as f32
-            / SPLASH_DURATION.as_millis() as f32)
-            .clamp(0.0, 1.0);
-
-        container(
-            canvas::Canvas::new(SplashScene { progress })
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_| container::Style::default().background(Color::from_rgb8(5, 12, 9)))
-        .into()
-    }
-
     fn workspace_view(&self) -> Element<'_, Message> {
         let p = self.palette();
-        let svg_selected = self.direction == Direction::SvgToVectorDrawable;
-        let xml_selected = self.direction == Direction::VectorDrawableToSvg;
 
-        let direction_switch = row![
-            button(text("SVG → XML").size(14))
-                .on_press(Message::DirectionSelected(Direction::SvgToVectorDrawable))
-                .padding([8, 14])
-                .style(move |_, _| direction_button_style(svg_selected, p)),
-            button(text("XML → SVG").size(14))
-                .on_press(Message::DirectionSelected(Direction::VectorDrawableToSvg))
-                .padding([8, 14])
-                .style(move |_, _| direction_button_style(xml_selected, p)),
-        ]
-        .spacing(4);
-
-        let header = row![
-            column![
-                text("WATERMELON").size(20).color(p.primary),
-                text("VECTOR CONVERTER").size(12).color(p.muted),
-            ]
-            .spacing(1),
-            space::horizontal(),
-            direction_switch,
-            button(text("About").size(13))
-                .on_press(Message::OpenAbout)
-                .padding([8, 12])
-                .style(move |_, _| secondary_button_style(p)),
-            button(text(self.appearance.label()).size(13))
-                .on_press(Message::ToggleAppearance)
-                .padding([8, 12])
-                .style(move |_, _| secondary_button_style(p)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .padding([4, 0]);
+        let header = workspace_header(self.direction, self.appearance, p);
 
         let mut content = column![header, self.state_view()]
             .spacing(24)
@@ -490,12 +584,14 @@ impl Converter {
                 source_preview,
                 output_preview,
                 output_text,
+                output_analysis,
             } => self.done_view(
                 name,
                 *direction,
                 source_preview.as_ref(),
                 output_preview.as_ref(),
                 output_text,
+                output_analysis.as_ref(),
             ),
             ConversionState::Error { name, message } => self.error_view(name.as_deref(), message),
         }
@@ -504,6 +600,7 @@ impl Converter {
     fn empty_view(&self) -> Element<'_, Message> {
         let p = self.palette();
         let content = column![
+            transformation_motif(self.direction, p),
             text("DROP A VECTOR FILE").size(16).color(p.primary),
             text(self.direction.input_hint()).size(15).color(p.muted),
             text("SVG and Android VectorDrawable XML are detected from their contents.")
@@ -589,14 +686,24 @@ impl Converter {
             text("Validating the vector and preparing previews. Keep this window open.")
                 .size(14)
                 .color(p.muted),
-            progress_bar(0.0..=1.0, 0.72)
-                .length(Length::Fixed(360.0))
-                .girth(Length::Fixed(8.0))
-                .style(move |_| progress_bar::Style {
-                    background: Background::Color(p.surface_muted),
-                    bar: Background::Color(p.primary_glow),
-                    border: Border::default().rounded(8.0).width(1.0).color(p.border),
-                }),
+            {
+                // Indeterminate: no real percentage exists to show (see
+                // working_phase's field doc), so this maps the 0..1
+                // triangle-wave phase to a back-and-forth sweep rather than
+                // a value that reads as "N% done" — the same
+                // Duration/Instant-driven approach viewer.rs already uses
+                // for AVD frame timing (iced::time::every, tokio feature,
+                // already enabled in Cargo.toml).
+                let sweep = 1.0 - (self.working_phase * 2.0 - 1.0).abs();
+                progress_bar(0.0..=1.0, sweep)
+                    .length(Length::Fixed(360.0))
+                    .girth(Length::Fixed(8.0))
+                    .style(move |_| progress_bar::Style {
+                        background: Background::Color(p.surface_muted),
+                        bar: Background::Color(p.primary_glow),
+                        border: Border::default().rounded(8.0).width(1.0).color(p.border),
+                    })
+            },
         ]
         .spacing(12)
         .align_x(iced::Alignment::Center)
@@ -611,12 +718,13 @@ impl Converter {
     }
 
     fn done_view<'a>(
-        &self,
+        &'a self,
         name: &'a str,
         direction: Direction,
         source_preview: Option<&'a image::Handle>,
         output_preview: Option<&'a image::Handle>,
         output_text: &'a str,
+        output_analysis: Option<&'a svg_converter_core::analysis::VectorAnalysis>,
     ) -> Element<'a, Message> {
         let p = self.palette();
         let summary = row![
@@ -624,55 +732,112 @@ impl Converter {
             column![
                 text("CONVERSION COMPLETE").size(15).color(p.primary),
                 text(name).size(18).color(p.on_surface),
-                text(format!(
-                    "{} · {} bytes",
-                    direction.label(),
-                    output_text.len()
-                ))
-                .size(13)
-                .color(p.muted),
+                row![
+                    transformation_motif(direction, p),
+                    text(format!("· {} bytes", output_text.len()))
+                        .size(13)
+                        .color(p.muted),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
             ]
             .spacing(3),
         ]
         .spacing(12)
         .align_y(iced::Alignment::Center);
 
-        let previews = row![
-            preview_panel(direction.source_label(), source_preview, p),
-            preview_panel(direction.output_label(), output_preview, p),
-        ]
-        .spacing(16)
-        .width(Length::Fill);
-
-        let output = column![
+        const TWO_PANE_BREAKPOINT: f32 = 760.0;
+        let previews: Element<'a, Message> = if self.window_width >= TWO_PANE_BREAKPOINT {
             row![
-                text("OUTPUT").size(14).color(p.primary),
-                space::horizontal(),
-                button(text("Copy").size(14))
-                    .on_press(Message::CopyOutput)
-                    .padding([7, 12])
+                preview_panel(direction.source_label(), source_preview, p),
+                preview_panel(direction.output_label(), output_preview, p),
+            ]
+            .spacing(16)
+            .width(Length::Fill)
+            .into()
+        } else {
+            column![
+                preview_panel(direction.source_label(), source_preview, p),
+                preview_panel(direction.output_label(), output_preview, p),
+            ]
+            .spacing(16)
+            .width(Length::Fill)
+            .into()
+        };
+
+        let analysis_element: Element<'a, Message> = match output_analysis {
+            Some(a) => vector_analysis_panel(a, p),
+            None => column![].into(),
+        };
+
+        let content = column![
+            summary,
+            previews,
+            analysis_element,
+            column![
+                row![
+                    column![
+                        text("OUTPUT").size(14).color(p.primary),
+                        text(format!(
+                            "{} · {}",
+                            output_name(name, direction),
+                            direction.output_label()
+                        ))
+                        .size(12)
+                        .color(p.muted),
+                    ]
+                    .spacing(2),
+                    space::horizontal(),
+                    button(text("Select All").size(14))
+                        .on_press(Message::CodeEditorAction(
+                            iced::widget::text_editor::Action::SelectAll
+                        ))
+                        .padding([7, 12])
+                        .style(move |_, _| secondary_button_style(p)),
+                    button(text("Copy").size(14))
+                        .on_press(Message::CopyOutput)
+                        .padding([7, 12])
+                        .style(move |_, _| secondary_button_style(p)),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+                // Not wrapped in a scrollable(): text_editor has its own
+                // built-in scrolling (confirmed via iced's 0.13.0
+                // changelog referencing a fix for "scrolling in
+                // text_editor"), and nesting it in an outer scrollable
+                // risks the exact "nested scrollables capturing all scroll
+                // events" class of bug iced's own changelog lists as a
+                // past fix elsewhere — so the editor is given a fixed
+                // height directly and left to handle its own scrolling.
+                // .wrapping(Wrapping::None) is what actually produces
+                // horizontal overflow instead of wrapping — this is the
+                // one part of this widget I could not visually verify
+                // (there's a known, filed iced issue where an equivalent
+                // call is silently ignored on the plain `text` widget;
+                // unconfirmed whether text_editor shares that bug) — check
+                // this specifically on a real build.
+                iced::widget::text_editor(&self.code_content)
+                    .font(iced::Font::MONOSPACE)
+                    .size(13)
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .height(Length::Fixed(190.0))
+                    .on_action(Message::CodeEditorAction),
+            ]
+            .spacing(10),
+            row![
+                button(text("Save As…").size(15))
+                    .on_press(Message::SaveRequested)
+                    .padding([11, 18])
+                    .style(move |_, _| primary_button_style(p)),
+                button(text("New conversion").size(15))
+                    .on_press(Message::Reset)
+                    .padding([11, 18])
                     .style(move |_, _| secondary_button_style(p)),
             ]
-            .align_y(iced::Alignment::Center),
-            scrollable(text(output_text).size(13).color(p.on_surface)).height(Length::Fixed(190.0)),
+            .spacing(12),
         ]
-        .spacing(10);
-
-        let actions = row![
-            button(text("Save As…").size(15))
-                .on_press(Message::SaveRequested)
-                .padding([11, 18])
-                .style(move |_, _| primary_button_style(p)),
-            button(text("New conversion").size(15))
-                .on_press(Message::Reset)
-                .padding([11, 18])
-                .style(move |_, _| secondary_button_style(p)),
-        ]
-        .spacing(12);
-
-        let content = column![summary, previews, output, actions]
-            .spacing(20)
-            .width(Length::Fill);
+        .spacing(20)
+        .width(Length::Fill);
 
         container(content)
             .width(Length::Fill)
@@ -950,7 +1115,7 @@ fn link_glyph<'a>(p: Palette) -> Element<'a, Message> {
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .style(move |_| container::Style {
-            background: Some(Background::Color(Color::from_rgba8(198, 40, 57, 0.16))),
+            background: Some(Background::Color(p.watermelon_red.scale_alpha(0.16))),
             border: Border::default().rounded(99.0),
             ..container::Style::default()
         })
@@ -970,171 +1135,6 @@ fn link_card_style(p: Palette) -> button::Style {
         text_color: p.on_surface,
         border: Border::default().rounded(18.0).width(1.0).color(p.border),
         ..button::Style::default()
-    }
-}
-
-struct SplashScene {
-    progress: f32,
-}
-
-impl<Message> canvas::Program<Message> for SplashScene {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let progress = self.progress.clamp(0.0, 1.0);
-        let eased = 1.0 - (1.0 - progress).powi(3);
-        let pulse = 0.58 + 0.42 * ((progress * std::f32::consts::PI * 2.0).sin() + 1.0) / 2.0;
-        let width = bounds.width;
-        let height = bounds.height;
-        let unit = (width.min(height) / 680.0).clamp(0.64, 1.45);
-        let center_x = width / 2.0;
-        let artwork_y = height * 0.42;
-
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgb8(5, 12, 9));
-        frame.fill(
-            &canvas::Path::circle(Point::new(center_x, artwork_y), 260.0 * unit),
-            Color::from_rgba8(100, 211, 153, 0.06 + 0.12 * pulse),
-        );
-        frame.fill(
-            &canvas::Path::circle(
-                Point::new(center_x - 95.0 * unit, artwork_y + 50.0 * unit),
-                150.0 * unit,
-            ),
-            Color::from_rgba8(198, 40, 57, 0.03 + 0.05 * (1.0 - pulse)),
-        );
-
-        let scale = 0.72 + 0.28 * eased;
-        let alpha = eased;
-        let fruit_center = Point::new(center_x - 92.0 * unit, artwork_y + 16.0 * unit);
-        let fruit_width = 196.0 * unit * scale;
-        let fruit_height = 178.0 * unit * scale;
-        let base_y = fruit_center.y + fruit_height / 2.0;
-        let top_y = fruit_center.y - fruit_height / 2.0;
-        let left_x = fruit_center.x - fruit_width / 2.0;
-        let right_x = fruit_center.x + fruit_width / 2.0;
-
-        let rind = canvas::Path::new(|builder| {
-            builder.move_to(Point::new(left_x, base_y));
-            builder.line_to(Point::new(fruit_center.x, top_y));
-            builder.line_to(Point::new(right_x, base_y));
-            builder.close();
-        });
-        frame.fill(&rind, Color::from_rgba8(20, 122, 112, alpha));
-        let white_layer = canvas::Path::new(|builder| {
-            builder.move_to(Point::new(left_x + 11.0 * unit, base_y - 7.0 * unit));
-            builder.line_to(Point::new(fruit_center.x, top_y + 12.0 * unit));
-            builder.line_to(Point::new(right_x - 11.0 * unit, base_y - 7.0 * unit));
-            builder.close();
-        });
-        frame.fill(&white_layer, Color::from_rgba8(247, 250, 248, alpha));
-        let flesh = canvas::Path::new(|builder| {
-            builder.move_to(Point::new(left_x + 20.0 * unit, base_y - 15.0 * unit));
-            builder.line_to(Point::new(fruit_center.x, top_y + 22.0 * unit));
-            builder.line_to(Point::new(right_x - 20.0 * unit, base_y - 15.0 * unit));
-            builder.close();
-        });
-        frame.fill(&flesh, Color::from_rgba8(198, 40, 57, alpha));
-
-        for (x, y) in [
-            (-35.0, 18.0),
-            (0.0, -2.0),
-            (35.0, 18.0),
-            (-10.0, 45.0),
-            (20.0, 48.0),
-        ] {
-            frame.fill(
-                &canvas::Path::circle(
-                    Point::new(
-                        fruit_center.x + x * unit * scale,
-                        fruit_center.y + y * unit * scale,
-                    ),
-                    5.0 * unit * scale,
-                ),
-                Color::from_rgba8(5, 12, 9, alpha),
-            );
-        }
-
-        let arrow_y = artwork_y - 6.0 * unit;
-        let arrow_start = Point::new(center_x + 24.0 * unit, arrow_y);
-        let arrow_end = Point::new(center_x + 184.0 * unit, arrow_y);
-        frame.stroke(
-            &canvas::Path::line(arrow_start, arrow_end),
-            canvas::Stroke::default()
-                .with_width(9.0 * unit)
-                .with_color(Color::from_rgba8(100, 211, 153, alpha)),
-        );
-        let arrow_head = canvas::Path::new(|builder| {
-            builder.move_to(Point::new(
-                arrow_end.x - 16.0 * unit,
-                arrow_end.y - 38.0 * unit,
-            ));
-            builder.line_to(Point::new(arrow_end.x + 34.0 * unit, arrow_end.y));
-            builder.line_to(Point::new(
-                arrow_end.x - 16.0 * unit,
-                arrow_end.y + 38.0 * unit,
-            ));
-            builder.line_to(Point::new(
-                arrow_end.x - 5.0 * unit,
-                arrow_end.y + 12.0 * unit,
-            ));
-            builder.line_to(Point::new(
-                arrow_end.x - 66.0 * unit,
-                arrow_end.y + 12.0 * unit,
-            ));
-            builder.line_to(Point::new(
-                arrow_end.x - 66.0 * unit,
-                arrow_end.y - 12.0 * unit,
-            ));
-            builder.line_to(Point::new(
-                arrow_end.x - 5.0 * unit,
-                arrow_end.y - 12.0 * unit,
-            ));
-            builder.close();
-        });
-        frame.fill(&arrow_head, Color::from_rgba8(247, 250, 248, alpha));
-        frame.fill(
-            &canvas::Path::circle(Point::new(center_x + 104.0 * unit, arrow_y), 52.0 * unit),
-            Color::from_rgba8(100, 211, 153, 0.05 + 0.12 * pulse),
-        );
-
-        let title_y = artwork_y + 205.0 * unit;
-        frame.fill_text(canvas::Text {
-            content: "WATERMELON".to_owned(),
-            position: Point::new(center_x - 128.0 * unit, title_y),
-            color: Color::from_rgba8(247, 250, 248, alpha),
-            size: (32.0 * unit).into(),
-            ..canvas::Text::default()
-        });
-        frame.fill_text(canvas::Text {
-            content: "VECTOR GRAPHICS CONVERTER".to_owned(),
-            position: Point::new(center_x - 116.0 * unit, title_y + 28.0 * unit),
-            color: Color::from_rgba8(100, 211, 153, alpha),
-            size: (12.0 * unit).into(),
-            ..canvas::Text::default()
-        });
-        let bar_width = 176.0 * unit;
-        let bar_x = center_x - bar_width / 2.0;
-        let bar_y = title_y + 70.0 * unit;
-        frame.fill_rectangle(
-            Point::new(bar_x, bar_y),
-            Size::new(bar_width, 5.0 * unit),
-            Color::from_rgba8(247, 250, 248, 0.14),
-        );
-        frame.fill_rectangle(
-            Point::new(bar_x, bar_y),
-            Size::new(bar_width * eased, 5.0 * unit),
-            Color::from_rgba8(100, 211, 153, alpha),
-        );
-
-        vec![frame.into_geometry()]
     }
 }
 
@@ -1264,6 +1264,112 @@ fn technology_layer<'a>(title: &'a str, detail: &'a str, p: Palette) -> Element<
     .into()
 }
 
+/// The top app bar: brand mark, the SVG↔VectorDrawable direction switch, and
+/// the About/theme-toggle buttons. Extracted out of `workspace_view` (unlike
+/// most other functions pulled out in this pass, this one is a real,
+/// non-cosmetic split: it removes the need to recompute
+/// `svg_selected`/`xml_selected` and rebuild this exact widget tree inline
+/// were it ever needed elsewhere).
+fn workspace_header<'a>(
+    direction: Direction,
+    appearance: Appearance,
+    p: Palette,
+) -> Element<'a, Message> {
+    let svg_selected = direction == Direction::SvgToVectorDrawable;
+    let xml_selected = direction == Direction::VectorDrawableToSvg;
+
+    let direction_switch = row![
+        button(text("SVG → XML").size(14))
+            .on_press(Message::DirectionSelected(Direction::SvgToVectorDrawable))
+            .padding([8, 14])
+            .style(move |_, _| direction_button_style(svg_selected, p)),
+        button(text("XML → SVG").size(14))
+            .on_press(Message::DirectionSelected(Direction::VectorDrawableToSvg))
+            .padding([8, 14])
+            .style(move |_, _| direction_button_style(xml_selected, p)),
+    ]
+    .spacing(4);
+
+    row![
+        column![
+            text("WATERMELON").size(20).color(p.primary),
+            text("VECTOR CONVERTER").size(12).color(p.muted),
+        ]
+        .spacing(1),
+        space::horizontal(),
+        direction_switch,
+        button(text("About").size(13))
+            .on_press(Message::OpenAbout)
+            .padding([8, 12])
+            .style(move |_, _| secondary_button_style(p)),
+        button(text(appearance.label()).size(13))
+            .on_press(Message::ToggleAppearance)
+            .padding([8, 12])
+            .style(move |_, _| secondary_button_style(p)),
+    ]
+    .align_y(iced::Alignment::Center)
+    .padding([4, 0])
+    .into()
+}
+
+/// A compact, informational format label — SVG / XML / (future) ZIP. Not a
+/// button: no `on_press`, purely a static pill of colored text, matching
+/// the redesign prompt's explicit "compact informational labels, not
+/// buttons" instruction. Background derives from `p.primary` via
+/// `scale_alpha` (the same pattern already used in `link_glyph` — see its
+/// doc comment from an earlier phase) rather than a new hardcoded color:
+/// SVG/XML both represent "a real, converted vector format," which reads
+/// as the same positive/primary semantic this app already uses for
+/// success states (see done_view's "✓ CONVERSION COMPLETE", also colored
+/// via p.primary) — so the badge intentionally borrows that same meaning
+/// rather than introducing a third, competing color idea. BatchZip is
+/// deliberately excluded from this green association (see its own arm
+/// below): a batch/zip container isn't a converted vector format, so it
+/// uses a neutral muted/border pairing instead, so it can't be mistaken
+/// for a third real conversion format.
+fn format_badge<'a>(format: VectorFormat, p: Palette) -> Element<'a, Message> {
+    let (background, text_color) = match format {
+        VectorFormat::Svg | VectorFormat::VdXml => (p.primary.scale_alpha(0.16), p.primary),
+        VectorFormat::BatchZip => (p.surface_muted, p.muted),
+    };
+
+    container(
+        text(format.short_label())
+            .size(12)
+            .color(text_color)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..iced::Font::DEFAULT
+            }),
+    )
+    .padding([4, 10])
+    .style(move |_| container::Style {
+        background: Some(Background::Color(background)),
+        border: Border::default().rounded(999.0),
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// The shared Source -> Result transformation motif: `[SOURCE badge] →
+/// [RESULT badge]`. Deliberately just the two badges plus a plain arrow
+/// glyph — no morphing, no animation, no gradient, no particles, per the
+/// redesign prompt's explicit "keep it restrained, static, and functional"
+/// instruction. `direction` alone is enough to derive both badges (via
+/// `Direction::source_format`/`output_format`), so every call site only
+/// ever needs to pass the current conversion direction, not two separate
+/// format values that could get swapped by mistake.
+fn transformation_motif<'a>(direction: Direction, p: Palette) -> Element<'a, Message> {
+    row![
+        format_badge(direction.source_format(), p),
+        text("→").size(16).color(p.muted),
+        format_badge(direction.output_format(), p),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
 fn preview_panel<'a>(
     label: &'a str,
     handle: Option<&'a image::Handle>,
@@ -1285,6 +1391,58 @@ fn preview_panel<'a>(
         .padding(14)
         .style(move |_| panel_style(p.surface_muted, p.border))
         .into()
+}
+
+/// Factual structural summary of the OUTPUT file — no fidelity score, no
+/// qualitative rating, no warnings. `VectorAnalysis` describes what the
+/// converter's own parser found by walking the output it just produced; it
+/// says nothing about what may have been lost, because — per
+/// svg_parser.rs's own doc comment — this converter's conversion is strict
+/// all-or-nothing (an unsupported construct is a hard `ConversionError`),
+/// so there is no partial-fidelity state to report. Naming this "Vector
+/// Analysis", not "Fidelity" or "Compatibility", is deliberate: it should
+/// never imply a check that didn't happen.
+fn vector_analysis_panel<'a>(
+    a: &svg_converter_core::analysis::VectorAnalysis,
+    p: Palette,
+) -> Element<'a, Message> {
+    let mut facts = vec![format!(
+        "{} path{}",
+        a.path_count,
+        if a.path_count == 1 { "" } else { "s" }
+    )];
+    if a.group_count > 0 {
+        facts.push(format!(
+            "{} group{}",
+            a.group_count,
+            if a.group_count == 1 { "" } else { "s" }
+        ));
+    }
+    facts.push(format!("{:.0} × {:.0}", a.width, a.height));
+    if a.uses_gradients {
+        facts.push("gradients".to_owned());
+    }
+    if a.uses_strokes {
+        facts.push("strokes".to_owned());
+    }
+    if let Some(tint) = &a.tint_color {
+        facts.push(format!("single color ({tint})"));
+    }
+    if a.is_animated {
+        facts.push("animated".to_owned());
+    }
+
+    container(
+        column![
+            text("VECTOR ANALYSIS").size(12).color(p.muted),
+            text(facts.join("   ·   ")).size(14).color(p.on_surface),
+        ]
+        .spacing(6),
+    )
+    .width(Length::Fill)
+    .padding(14)
+    .style(move |_| panel_style(p.surface_muted, p.border))
+    .into()
 }
 
 fn panel_style(background: Color, border_color: Color) -> container::Style {
@@ -1331,7 +1489,6 @@ fn direction_button_style(selected: bool, p: Palette) -> button::Style {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    SplashTick,
     OpenAbout,
     CloseAbout,
     ToggleAppearance,
@@ -1350,6 +1507,17 @@ pub enum Message {
     OutputSaved(Result<Option<PathBuf>, String>),
     Reset,
     IcedEvent(iced::Event),
+    /// Any interaction with the code viewer's `text_editor` — click, drag,
+    /// scroll, select, or (filtered out in update()) an edit attempt. Named
+    /// generically rather than e.g. `CodeSelectAll` because `on_action`
+    /// hands back every kind of `text_editor::Action` uniformly; the
+    /// specific "Select All" button in the UI just dispatches
+    /// `Action::SelectAll` through this same message.
+    CodeEditorAction(iced::widget::text_editor::Action),
+    /// Advances the indeterminate progress animation in `working_view` —
+    /// only ever dispatched while `ConversionState::Working` is active
+    /// (see `subscription()`).
+    WorkingTick,
 }
 
 async fn open_url(url: &'static str) {
@@ -1436,12 +1604,27 @@ async fn convert_input(input: InputFile, direction: Direction) -> Result<Convert
         }
     };
 
+    // Structural analysis of the OUTPUT — analyze_vector/analyze_vd_vector
+    // are swapped relative to the render calls above, since the output of
+    // SvgToVectorDrawable is VectorDrawable XML (needs the VD analyzer) and
+    // vice versa; a best-effort summary, so a failure here doesn't fail the
+    // conversion that already genuinely succeeded.
+    let output_analysis = match direction {
+        Direction::SvgToVectorDrawable => {
+            svg_converter_core::analyze_vd_vector(output_text.as_bytes()).ok()
+        }
+        Direction::VectorDrawableToSvg => {
+            svg_converter_core::analyze_vector(output_text.as_bytes()).ok()
+        }
+    };
+
     Ok(ConvertedOutput {
         name: input.name,
         direction,
         source_preview,
         output_preview,
         output_text,
+        output_analysis,
     })
 }
 

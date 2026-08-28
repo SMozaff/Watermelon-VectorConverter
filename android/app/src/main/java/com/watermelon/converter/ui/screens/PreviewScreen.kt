@@ -8,9 +8,11 @@ package com.watermelon.converter.ui.screens
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.watermelon.converter.Routes
+import com.watermelon.converter.ui.components.TransformationMotif
 import com.watermelon.converter.ui.components.VectorPropertiesPanel
 import com.watermelon.converter.ui.sharedGraphViewModel
 import com.watermelon.converter.ui.theme.*
@@ -62,7 +65,7 @@ fun PreviewScreen(
         reverseState is ReverseConvertUiState.Working -> reverseState.sourceName
         reverseState is ReverseConvertUiState.Error -> reverseState.sourceName
         revDone != null -> revDone.sourceName
-        else -> "Preview"
+        else -> "Result"
     }
 
     Scaffold(
@@ -329,19 +332,45 @@ private fun SuccessContent(
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ConversionReport(sourceName, outputXml, outputLabel = outputLabel)
+        ConversionReport(sourceName, outputXml, outputLabel = outputLabel, isForward = isForward)
 
         Text(
             "Both previews are approximate (rendered via resvg, not Android's pipeline).",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            PreviewTile(sourcePreviewLabel, sourcePreview, Modifier.weight(1f))
-            PreviewTile(outputPreviewLabel, outputPreview, Modifier.weight(1f))
+        // Side-by-side above 600dp width, stacked below it. 600dp is the
+        // real, official Material Design "compact width" breakpoint
+        // (Compact < 600dp covers ~99.96% of phones in portrait; 600dp+
+        // is landscape phones and tablets) — not using the actual
+        // WindowSizeClass/material3-window-size-class library here since
+        // it's a separate dependency this project doesn't currently have
+        // (same category of decision as the Compose BOM bump this file's
+        // Select All support is waiting on — flagging rather than adding
+        // silently); BoxWithConstraints (already available via the
+        // existing foundation.layout import, no new dependency) reads the
+        // same real breakpoint value directly. Below 600dp, the previous
+        // unconditional Row(weight(1f), weight(1f)) squeezed both source
+        // and result previews into an unusably narrow half-width on a
+        // typical portrait phone.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= 600.dp) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    PreviewTile(sourcePreviewLabel, sourcePreview, Modifier.weight(1f))
+                    PreviewTile(outputPreviewLabel, outputPreview, Modifier.weight(1f))
+                }
+            } else {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    PreviewTile(sourcePreviewLabel, sourcePreview, Modifier.fillMaxWidth())
+                    PreviewTile(outputPreviewLabel, outputPreview, Modifier.fillMaxWidth())
+                }
+            }
         }
 
         var propertiesExpanded by remember { mutableStateOf(false) }
@@ -396,11 +425,25 @@ private fun SuccessContent(
                 }
                 if (expanded) {
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        outputXml,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    )
+                    // SelectionContainer: real text selection (long-press
+                    // + drag, native Android copy) — was plain Text()
+                    // before, which per Compose's own docs has NO
+                    // selection capability at all. horizontalScroll +
+                    // softWrap = false: long XML/SVG attribute lines
+                    // scroll instead of wrapping mid-attribute, matching
+                    // the desktop code viewer's same no-wrap-plus-scroll
+                    // choice from an earlier phase.
+                    SelectionContainer {
+                        Text(
+                            outputXml,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            softWrap = false,
+                            modifier = Modifier
+                                .horizontalScroll(rememberScrollState())
+                                .fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -408,7 +451,7 @@ private fun SuccessContent(
 }
 
 @Composable
-private fun ConversionReport(sourceName: String, outputXml: String, outputLabel: String) {
+private fun ConversionReport(sourceName: String, outputXml: String, outputLabel: String, isForward: Boolean) {
     val lineCount = outputXml.lines().size
     val sizeKb = "%.1f KB".format(outputXml.toByteArray().size / 1024.0)
 
@@ -422,6 +465,7 @@ private fun ConversionReport(sourceName: String, outputXml: String, outputLabel:
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Conversion successful", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            TransformationMotif(isForward = isForward)
             ReportRow("Source file", sourceName)
             ReportRow("Output size", sizeKb)
             ReportRow("$outputLabel lines", lineCount.toString())

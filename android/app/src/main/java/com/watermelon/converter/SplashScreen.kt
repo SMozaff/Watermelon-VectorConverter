@@ -47,9 +47,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.watermelon.converter.jni.SvgConverterNative
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 
-private const val SPLASH_DURATION_MS = 1500L
+private const val SPLASH_MIN_DURATION_MS = 750L
 private val SplashBackground = Color(0xFF050C09)
 private val SplashGreen = Color(0xFF64D399)
 private val SplashTeal = Color(0xFF147A70)
@@ -82,7 +86,29 @@ fun WatermelonSplash(onFinished: () -> Unit) {
 
     LaunchedEffect(Unit) {
         revealed.value = true
-        delay(SPLASH_DURATION_MS)
+        // Splash duration now tracks REAL work instead of a fixed delay:
+        // loading libsvg_converter_core.so (SvgConverterNative's init{}
+        // block) is genuine, potentially-slow native work that today only
+        // happens lazily on first conversion — triggering it here means
+        // the app's actual first JNI call, whenever it happens later, is
+        // already warm. Runs on Dispatchers.Default (off the main/Compose
+        // thread) so a slow .so load can't freeze the splash animation
+        // itself; SPLASH_MIN_DURATION_MS is a floor, not the whole
+        // duration — if loading finishes faster than that, the splash
+        // still waits out the floor so it never flashes for a few ms on a
+        // fast device, but it never waits LONGER than real loading takes
+        // plus that floor. If the library load throws, that failure is
+        // already logged and rethrown inside SvgConverterNative's own
+        // init{} block — swallowed here specifically so a load failure
+        // doesn't also crash the splash itself; the real error surfaces
+        // the moment the user does anything that calls into the JNI
+        // bridge, same as it would have before this change with a
+        // lazily-triggered failure.
+        val minDurationJob = async { delay(SPLASH_MIN_DURATION_MS) }
+        val libraryLoadJob = async(Dispatchers.Default) {
+            runCatching { SvgConverterNative.javaClass }
+        }
+        awaitAll(minDurationJob, libraryLoadJob)
         onFinished()
     }
 
