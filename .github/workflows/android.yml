@@ -28,7 +28,7 @@ jobs:
         run: cargo install cargo-ndk --locked
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Build Rust core (all ABI targets)
         working-directory: svg-converter-core
@@ -140,7 +140,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.97.1
         with: { targets: "aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android" }
       - run: cargo install cargo-ndk --locked
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Make gradlew executable
         working-directory: android
         run: chmod +x ./gradlew
