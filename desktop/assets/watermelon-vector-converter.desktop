@@ -5,3 +5,4 @@ Comment=Convert between SVG and Android VectorDrawable XML
 Exec=wvgc-desktop
 Terminal=false
 Categories=Graphics;Viewer;Utility;
+Icon=watermelon-vector-converter
